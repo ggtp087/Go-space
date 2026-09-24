@@ -11,6 +11,10 @@ node_modules
 dist
 dist-ssr
 *.local
+*.tsbuildinfo
+
+# Scratch/temp files (e.g. extracted design assets)
+.tmp/
 
 # Editor directories and files
 .vscode/*
