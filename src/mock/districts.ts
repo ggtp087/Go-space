@@ -74,6 +74,29 @@ export function getAreaIndicators(row: DistrictRow): { openSpaceSharePct: number
   return { openSpaceSharePct: row.opsSharePct, streetsPct, builtUpOpenPct }
 }
 
+export type AccessibilityBracket = {
+  color: string
+  label: string
+  count: number
+}
+
+const ACCESSIBILITY_BANDS = [
+  { min: 80, max: 100, color: '#2A7A54', label: '80–100%' },
+  { min: 65, max: 79, color: '#7FB88F', label: '65–79%' },
+  { min: 50, max: 64, color: '#D8D3A0', label: '50–64%' },
+  { min: 30, max: 49, color: '#E4B064', label: '30–49%' },
+  { min: 0, max: 29, color: '#D9822B', label: '0–29%' },
+]
+
+/** How many of the given rows fall into each step of the 5-step accessibility scale. */
+export function getAccessibilityBrackets(rows: DistrictRow[]): AccessibilityBracket[] {
+  return ACCESSIBILITY_BANDS.map((band) => ({
+    color: band.color,
+    label: band.label,
+    count: rows.filter((row) => row.accessibilityPct >= band.min && row.accessibilityPct <= band.max).length,
+  }))
+}
+
 export type ComparisonDistrict = {
   id: string
   name: string

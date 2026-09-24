@@ -16,7 +16,11 @@ function resolveStrings(language: Language): Strings {
     adminLevel: { ...en.adminLevel, ...th.adminLevel },
     filters: { ...en.filters, ...th.filters },
     common: { ...en.common, ...th.common },
-    dashboard: { ...en.dashboard, ...th.dashboard },
+    dashboard: {
+      ...en.dashboard,
+      ...th.dashboard,
+      columns: { ...en.dashboard.columns, ...th.dashboard?.columns },
+    },
     compare: { ...en.compare, ...th.compare },
     auth: {
       login: { ...en.auth.login, ...th.auth?.login },
