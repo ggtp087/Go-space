@@ -37,7 +37,7 @@ export function Input({
           {...rest}
           id={inputId}
           type={resolvedType}
-          className={`h-11 w-full rounded-[9px] border-[1.5px] text-[14px] text-ink outline-none placeholder:text-[#A9B4AC] focus:border-green-600 ${
+          className={`h-11 w-full rounded-[9px] border-[1.5px] text-[14px] text-ink outline-none placeholder:text-[#A9B4AC] focus:border-green-600 disabled:cursor-not-allowed disabled:border-line-2 disabled:bg-bg disabled:text-slate ${
             error ? 'border-red-400' : 'border-line-2'
           } ${icon ? 'pl-10' : 'pl-3.5'} ${isPassword && showPasswordToggle ? 'pr-10' : 'pr-3.5'}`}
         />

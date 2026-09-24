@@ -22,6 +22,13 @@ function resolveStrings(language: Language): Strings {
       register: { ...en.auth.register, ...th.auth?.register },
       resetPassword: { ...en.auth.resetPassword, ...th.auth?.resetPassword },
     },
+    account: {
+      ...en.account,
+      ...th.account,
+      tabs: { ...en.account.tabs, ...th.account?.tabs },
+      profileCard: { ...en.account.profileCard, ...th.account?.profileCard },
+      securityCard: { ...en.account.securityCard, ...th.account?.securityCard },
+    },
   }
 }
 

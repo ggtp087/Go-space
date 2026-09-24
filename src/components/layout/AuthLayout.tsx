@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { BrandLockup } from '../brand/BrandLockup'
 import { LanguageToggle } from '../LanguageToggle'
 import { useLanguage } from '../../i18n/LanguageContext'
@@ -12,6 +12,13 @@ import { useLanguage } from '../../i18n/LanguageContext'
  */
 export function AuthLayout() {
   const { t } = useLanguage()
+  const { pathname } = useLocation()
+  const brandCopy = pathname.startsWith('/register')
+    ? t.auth.register
+    : pathname.startsWith('/reset-password')
+      ? t.auth.resetPassword
+      : t.auth.login
+
   return (
     <div className="flex min-h-screen">
       <aside className="relative hidden w-[620px] flex-none flex-col overflow-hidden bg-gradient-to-br from-green-800 to-green-900 p-12 lg:flex">
@@ -20,8 +27,8 @@ export function AuthLayout() {
         <BrandLockup size="lg" className="relative z-10" />
 
         <div className="relative z-10 my-auto max-w-[440px]">
-          <h1 className="mb-4 text-[34px] font-bold leading-[1.28] text-white">{t.brand.title}</h1>
-          <p className="max-w-[400px] text-[14.5px] leading-[1.7] text-[#CFE3D6]">{t.brand.text}</p>
+          <h1 className="mb-4 text-[34px] font-bold leading-[1.28] text-white">{brandCopy.brandTitle}</h1>
+          <p className="max-w-[400px] text-[14.5px] leading-[1.7] text-[#CFE3D6]">{brandCopy.brandText}</p>
           <div className="mt-6 flex gap-2.5">
             <span className="rounded-full border border-white/14 bg-white/8 px-3.5 py-1.5 text-[11.5px] font-semibold text-green-100">
               {t.brand.badgeIndicator}
