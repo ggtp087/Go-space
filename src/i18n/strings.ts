@@ -92,6 +92,10 @@ export const en = {
     yearALabel: 'Year A',
     yearBLabel: 'Year B',
     addDistrict: 'Add district (up to 3)',
+    chartTitle: 'Key metrics, side by side',
+    metricAccessibility: 'Accessibility (400 m)',
+    ofResidentsAccessible: 'accessible',
+    populationLabel: 'Population',
   },
   auth: {
     login: {
