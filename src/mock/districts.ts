@@ -4,7 +4,6 @@ export type DistrictRow = {
   id: string
   year: Year
   name: string
-  nameTh: string
   population: number
   accessibilityPct: number
   openSpaces: number
@@ -22,17 +21,18 @@ export function accessibilityColor(pct: number): string {
 
 type DistrictSeed = Omit<DistrictRow, 'year'>
 
+// Generic placeholder names — real Bangkok districts/data land later.
 const districtSeeds2026: DistrictSeed[] = [
-  { id: 'pathum-wan', name: 'Pathum Wan', nameTh: 'ปทุมวัน', population: 62000, accessibilityPct: 86, openSpaces: 9, opsSharePct: 14.8 },
-  { id: 'bang-rak', name: 'Bang Rak', nameTh: 'บางรัก', population: 45000, accessibilityPct: 79, openSpaces: 6, opsSharePct: 11.9 },
-  { id: 'watthana', name: 'Watthana', nameTh: 'วัฒนา', population: 79000, accessibilityPct: 76, openSpaces: 7, opsSharePct: 10.4 },
-  { id: 'chatuchak', name: 'Chatuchak', nameTh: 'จตุจักร', population: 158000, accessibilityPct: 74, openSpaces: 8, opsSharePct: 13.2 },
-  { id: 'huai-khwang', name: 'Huai Khwang', nameTh: 'ห้วยขวาง', population: 84000, accessibilityPct: 71, openSpaces: 5, opsSharePct: 9.1 },
-  { id: 'khlong-toei', name: 'Khlong Toei', nameTh: 'คลองเตย', population: 96000, accessibilityPct: 61, openSpaces: 6, opsSharePct: 9.8 },
-  { id: 'bang-kapi', name: 'Bang Kapi', nameTh: 'บางกะปิ', population: 146000, accessibilityPct: 49, openSpaces: 4, opsSharePct: 6.5 },
-  { id: 'nong-khaem', name: 'Nong Khaem', nameTh: 'หนองแขม', population: 154000, accessibilityPct: 25, openSpaces: 2, opsSharePct: 3.4 },
-  { id: 'min-buri', name: 'Min Buri', nameTh: 'มีนบุรี', population: 141000, accessibilityPct: 22, openSpaces: 2, opsSharePct: 3.1 },
-  { id: 'nong-chok', name: 'Nong Chok', nameTh: 'หนองจอก', population: 172000, accessibilityPct: 12, openSpaces: 1, opsSharePct: 2.1 },
+  { id: 'district-a', name: 'District A', population: 62000, accessibilityPct: 86, openSpaces: 9, opsSharePct: 14.8 },
+  { id: 'district-b', name: 'District B', population: 45000, accessibilityPct: 79, openSpaces: 6, opsSharePct: 11.9 },
+  { id: 'district-c', name: 'District C', population: 79000, accessibilityPct: 76, openSpaces: 7, opsSharePct: 10.4 },
+  { id: 'district-d', name: 'District D', population: 158000, accessibilityPct: 74, openSpaces: 8, opsSharePct: 13.2 },
+  { id: 'district-e', name: 'District E', population: 84000, accessibilityPct: 71, openSpaces: 5, opsSharePct: 9.1 },
+  { id: 'district-f', name: 'District F', population: 96000, accessibilityPct: 61, openSpaces: 6, opsSharePct: 9.8 },
+  { id: 'district-g', name: 'District G', population: 146000, accessibilityPct: 49, openSpaces: 4, opsSharePct: 6.5 },
+  { id: 'district-h', name: 'District H', population: 154000, accessibilityPct: 25, openSpaces: 2, opsSharePct: 3.4 },
+  { id: 'district-i', name: 'District I', population: 141000, accessibilityPct: 22, openSpaces: 2, opsSharePct: 3.1 },
+  { id: 'district-j', name: 'District J', population: 172000, accessibilityPct: 12, openSpaces: 1, opsSharePct: 2.1 },
 ]
 
 /** 2024 was an earlier sample year — slightly less coverage than 2026 for every district. */
@@ -58,23 +58,35 @@ export function getDistrictRow(id: string, year: Year): DistrictRow | undefined 
   return sampleDistrictRows.find((row) => row.id === id && row.year === year)
 }
 
+/** Residents covered vs. not covered by a 400 m service area — always sums to population. */
+export function getCoverage(row: DistrictRow): { covered: number; notCovered: number } {
+  const covered = Math.round((row.population * row.accessibilityPct) / 100)
+  return { covered, notCovered: row.population - covered }
+}
+
+/**
+ * SDG 11.7.1 area-based indicators. Built-up area open for public use is kept
+ * larger than the open space share by construction, per the site's data rules.
+ */
+export function getAreaIndicators(row: DistrictRow): { openSpaceSharePct: number; streetsPct: number; builtUpOpenPct: number } {
+  const streetsPct = Math.round(row.opsSharePct * 1.15 * 10) / 10
+  const builtUpOpenPct = Math.round(row.opsSharePct * 1.4 * 10) / 10
+  return { openSpaceSharePct: row.opsSharePct, streetsPct, builtUpOpenPct }
+}
+
 export type ComparisonDistrict = {
   id: string
   name: string
   color: string
 }
 
+// District A, D, J — spans the accessibility range (highest/mid/lowest) for a useful demo.
 export const sampleComparisonDistricts: ComparisonDistrict[] = [
-  { id: 'pathum-wan', name: 'Pathum Wan', color: '#1B4332' },
-  { id: 'chatuchak', name: 'Chatuchak', color: '#3F8F63' },
-  { id: 'nong-chok', name: 'Nong Chok', color: '#C2660F' },
+  { id: 'district-a', name: 'District A', color: '#1B4332' },
+  { id: 'district-d', name: 'District D', color: '#3F8F63' },
+  { id: 'district-j', name: 'District J', color: '#C2660F' },
 ]
 
 export const sampleOpenSpaceTypes = ['All types', 'Parks', 'Urban forests', 'Playgrounds', 'Plazas', 'Sports fields']
 
-export const sampleDistrictOptions = [
-  { value: 'chatuchak', label: 'Chatuchak' },
-  { value: 'pathum-wan', label: 'Pathum Wan' },
-  { value: 'bang-rak', label: 'Bang Rak' },
-  { value: 'watthana', label: 'Watthana' },
-]
+export const sampleDistrictOptions = districtSeeds2026.map((seed) => ({ value: seed.id, label: seed.name }))

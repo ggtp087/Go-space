@@ -66,12 +66,7 @@ const TABLE_COLUMNS: DataTableColumn<DistrictRow>[] = [
   {
     key: 'name',
     header: 'District',
-    render: (row) => (
-      <div>
-        <div className="font-semibold">{row.name}</div>
-        <div className="text-[11px] text-slate">{row.nameTh}</div>
-      </div>
-    ),
+    render: (row) => <span className="font-semibold">{row.name}</span>,
   },
   { key: 'population', header: 'Population', sortable: true, align: 'right' },
   {

@@ -15,6 +15,7 @@ function resolveStrings(language: Language): Strings {
     map: { ...en.map, ...th.map },
     adminLevel: { ...en.adminLevel, ...th.adminLevel },
     filters: { ...en.filters, ...th.filters },
+    common: { ...en.common, ...th.common },
     dashboard: { ...en.dashboard, ...th.dashboard },
     compare: { ...en.compare, ...th.compare },
     auth: {

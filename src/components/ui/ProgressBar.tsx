@@ -5,14 +5,15 @@ type ProgressBarProps = {
   valueLabel?: string
   color?: string
   size?: 'sm' | 'md'
+  className?: string
 }
 
-export function ProgressBar({ value, label, valueLabel, color = 'var(--color-green-600)', size = 'md' }: ProgressBarProps) {
+export function ProgressBar({ value, label, valueLabel, color = 'var(--color-green-600)', size = 'md', className = '' }: ProgressBarProps) {
   const clamped = Math.min(100, Math.max(0, value))
   const trackHeight = size === 'sm' ? 'h-1.5' : 'h-[7px]'
 
   return (
-    <div>
+    <div className={className}>
       {(label || valueLabel) && (
         <div className="mb-[5px] flex items-center justify-between text-[12.5px]">
           {label && <span className="text-slate">{label}</span>}

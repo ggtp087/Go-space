@@ -34,6 +34,23 @@ export const en = {
     legendNote: 'Within 400 m walking distance (street network)',
     filtersTitle: 'Layers & Filters',
     mapPlaceholder: 'Map placeholder',
+    layersSectionTitle: 'Map layers',
+    filtersSectionTitle: 'Filters',
+    openSpaceTypeLabel: 'Open space type',
+    districtLabel: 'District',
+    accessibilityRangeLabel: 'Accessibility range',
+    adminLevelLabel: 'Admin level',
+    areaDetailsTitle: 'Area details',
+    ofResidents: 'of residents',
+    accessibilityDescription: 'Share of residents living within a 400 m walk of a public green or open space — the SDG 11.7.1 population indicator.',
+    coveredLabel: 'Covered',
+    notCoveredLabel: 'Not covered',
+    sdgSectionTitle: 'SDG 11.7.1 area-based indicators',
+    openSpaceShareLabel: 'Open public space share',
+    streetsLabel: 'Land allocated to streets',
+    builtUpOpenLabel: 'Built-up area open for public use',
+    nearbySectionTitle: 'Nearby public spaces',
+    addToComparison: 'Add to comparison',
   },
   adminLevel: {
     district: 'District',
@@ -41,6 +58,9 @@ export const en = {
   },
   filters: {
     year: 'Year',
+  },
+  common: {
+    sampleDataTag: 'All figures are sample data for demonstration',
   },
   dashboard: {
     analysisYear: 'Analysis year',
