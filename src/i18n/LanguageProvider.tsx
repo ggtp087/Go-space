@@ -11,6 +11,14 @@ function resolveStrings(language: Language): Strings {
     search: { ...en.search, ...th.search },
     lang: { ...en.lang, ...th.lang },
     user: { ...en.user, ...th.user },
+    pages: { ...en.pages, ...th.pages },
+    map: { ...en.map, ...th.map },
+    adminLevel: { ...en.adminLevel, ...th.adminLevel },
+    auth: {
+      login: { ...en.auth.login, ...th.auth?.login },
+      register: { ...en.auth.register, ...th.auth?.register },
+      resetPassword: { ...en.auth.resetPassword, ...th.auth?.resetPassword },
+    },
   }
 }
 

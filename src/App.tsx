@@ -1,48 +1,38 @@
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './components/layout/AppLayout'
 import { AuthLayout } from './components/layout/AuthLayout'
 import { LanguageProvider } from './i18n/LanguageProvider'
-
-// Temporary placeholders so the two layouts are visible before real routing
-// and pages land (step 3). Replace both `element`s once the actual pages
-// (Map/Dashboard/Compare, Login/Register/ResetPassword) exist.
-function AppLayoutPreview() {
-  return (
-    <div className="flex flex-1 items-center justify-center text-slate">
-      <p>
-        Signed-in layout preview — pages come next.{' '}
-        <Link to="/login" className="font-semibold text-green-700">
-          View auth layout →
-        </Link>
-      </p>
-    </div>
-  )
-}
-
-function AuthLayoutPreview() {
-  return (
-    <div className="text-center text-slate">
-      <p>
-        Auth layout preview — Login/Register/Reset pages come next.{' '}
-        <Link to="/" className="font-semibold text-green-700">
-          ← Back
-        </Link>
-      </p>
-    </div>
-  )
-}
+import { LoginPage } from './pages/LoginPage'
+import { RegisterPage } from './pages/RegisterPage'
+import { ResetPasswordPage } from './pages/ResetPasswordPage'
+import { MapPage } from './pages/MapPage'
+import { DashboardPage } from './pages/DashboardPage'
+import { ComparePage } from './pages/ComparePage'
+import { AccountSettingsPage } from './pages/AccountSettingsPage'
+import { ComponentsPreviewPage } from './pages/ComponentsPreviewPage'
 
 function App() {
   return (
     <LanguageProvider>
       <BrowserRouter>
         <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<AppLayoutPreview />} />
-          </Route>
+          <Route path="/" element={<Navigate to="/map" replace />} />
+
           <Route element={<AuthLayout />}>
-            <Route path="/login" element={<AuthLayoutPreview />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
           </Route>
+
+          <Route element={<AppLayout />}>
+            <Route path="/map" element={<MapPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/compare" element={<ComparePage />} />
+            <Route path="/account" element={<AccountSettingsPage />} />
+          </Route>
+
+          {/* Temporary — remove once real pages are assembled from these components. */}
+          <Route path="/components" element={<ComponentsPreviewPage />} />
         </Routes>
       </BrowserRouter>
     </LanguageProvider>

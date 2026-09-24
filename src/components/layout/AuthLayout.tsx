@@ -1,7 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { BrandLockup } from '../brand/BrandLockup'
 import { LanguageToggle } from '../LanguageToggle'
-import { en } from '../../i18n/strings'
+import { useLanguage } from '../../i18n/LanguageContext'
 
 /**
  * Shell for the signed-out flows (login, register, reset password): a fixed
@@ -11,6 +11,7 @@ import { en } from '../../i18n/strings'
  * district geometry — actual map boundaries come later once real data exists.
  */
 export function AuthLayout() {
+  const { t } = useLanguage()
   return (
     <div className="flex min-h-screen">
       <aside className="relative hidden w-[620px] flex-none flex-col overflow-hidden bg-gradient-to-br from-green-800 to-green-900 p-12 lg:flex">
@@ -19,22 +20,22 @@ export function AuthLayout() {
         <BrandLockup size="lg" className="relative z-10" />
 
         <div className="relative z-10 my-auto max-w-[440px]">
-          <h1 className="mb-4 text-[34px] font-bold leading-[1.28] text-white">{en.brand.title}</h1>
-          <p className="max-w-[400px] text-[14.5px] leading-[1.7] text-[#CFE3D6]">{en.brand.text}</p>
+          <h1 className="mb-4 text-[34px] font-bold leading-[1.28] text-white">{t.brand.title}</h1>
+          <p className="max-w-[400px] text-[14.5px] leading-[1.7] text-[#CFE3D6]">{t.brand.text}</p>
           <div className="mt-6 flex gap-2.5">
             <span className="rounded-full border border-white/14 bg-white/8 px-3.5 py-1.5 text-[11.5px] font-semibold text-green-100">
-              {en.brand.badgeIndicator}
+              {t.brand.badgeIndicator}
             </span>
             <span className="rounded-full border border-white/14 bg-white/8 px-3.5 py-1.5 text-[11.5px] font-semibold text-green-100">
-              {en.brand.badgeCoverage}
+              {t.brand.badgeCoverage}
             </span>
           </div>
         </div>
 
         <p className="relative z-10 text-[11.5px] leading-relaxed text-[#9DBBA9]">
-          {en.brand.footLine1}
+          {t.brand.footLine1}
           <br />
-          {en.brand.footLine2}
+          {t.brand.footLine2}
         </p>
       </aside>
 

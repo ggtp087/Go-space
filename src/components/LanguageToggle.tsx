@@ -1,5 +1,4 @@
 import { useLanguage, type Language } from '../i18n/LanguageContext'
-import { en } from '../i18n/strings'
 
 type LanguageToggleProps = {
   /** `dark` sits on the green navbar; `light` sits on a white surface. */
@@ -7,18 +6,17 @@ type LanguageToggleProps = {
   className?: string
 }
 
-const OPTIONS: { value: Language; label: string }[] = [
-  { value: 'en', label: en.lang.en },
-  { value: 'th', label: en.lang.th },
-]
-
 export function LanguageToggle({ variant = 'dark', className = '' }: LanguageToggleProps) {
-  const { language, setLanguage } = useLanguage()
+  const { language, setLanguage, t } = useLanguage()
   const trackClass = variant === 'dark' ? 'bg-white/8' : 'bg-bg'
+  const options: { value: Language; label: string }[] = [
+    { value: 'en', label: t.lang.en },
+    { value: 'th', label: t.lang.th },
+  ]
 
   return (
     <div className={`flex rounded-lg p-0.5 ${trackClass} ${className}`}>
-      {OPTIONS.map((option) => {
+      {options.map((option) => {
         const isActive = option.value === language
         return (
           <button

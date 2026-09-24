@@ -26,7 +26,35 @@ export const en = {
   },
   user: {
     accountSettings: 'Account settings',
-    logOut: 'Log out',
+    signOut: 'Sign out',
+  },
+  pages: {
+    accountSettingsTitle: 'Account settings',
+  },
+  map: {
+    legendTitle: 'Accessibility to public green & open space',
+    legendNote: 'Within 400 m walking distance (street network)',
+  },
+  adminLevel: {
+    district: 'District',
+    subDistrict: 'Sub-district',
+  },
+  auth: {
+    login: {
+      title: 'Sign in',
+      forgotPassword: 'Forgot password?',
+      noAccount: "Don't have an account?",
+      registerHere: 'Register here',
+    },
+    register: {
+      title: 'Create your account',
+      haveAccount: 'Have an account?',
+      signIn: 'Sign in',
+    },
+    resetPassword: {
+      title: 'Reset your password',
+      backToSignIn: 'Back to sign in',
+    },
   },
 } as const
 
