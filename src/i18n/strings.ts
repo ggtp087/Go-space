@@ -34,10 +34,30 @@ export const en = {
   map: {
     legendTitle: 'Accessibility to public green & open space',
     legendNote: 'Within 400 m walking distance (street network)',
+    filtersTitle: 'Layers & Filters',
+    mapPlaceholder: 'Map placeholder',
   },
   adminLevel: {
     district: 'District',
     subDistrict: 'Sub-district',
+  },
+  filters: {
+    year: 'Year',
+  },
+  dashboard: {
+    analysisYear: 'Analysis year',
+    trendTitle: 'Accessibility trend by year',
+    trendComingSoon: 'Trend chart coming soon — accessibility % by year',
+  },
+  compare: {
+    title: 'Compare districts',
+    subtitle: 'Select 2–3 areas to compare accessibility and SDG 11.7.1 indicators side by side',
+    modeDistricts: 'Compare districts',
+    modeYears: 'Compare years',
+    districtLabel: 'District',
+    yearALabel: 'Year A',
+    yearBLabel: 'Year B',
+    addDistrict: 'Add district (up to 3)',
   },
   auth: {
     login: {

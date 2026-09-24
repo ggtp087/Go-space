@@ -14,6 +14,9 @@ function resolveStrings(language: Language): Strings {
     pages: { ...en.pages, ...th.pages },
     map: { ...en.map, ...th.map },
     adminLevel: { ...en.adminLevel, ...th.adminLevel },
+    filters: { ...en.filters, ...th.filters },
+    dashboard: { ...en.dashboard, ...th.dashboard },
+    compare: { ...en.compare, ...th.compare },
     auth: {
       login: { ...en.auth.login, ...th.auth?.login },
       register: { ...en.auth.register, ...th.auth?.register },

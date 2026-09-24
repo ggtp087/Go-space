@@ -13,17 +13,19 @@ import { RangeSlider } from '../components/ui/RangeSlider'
 import { SidePanel } from '../components/ui/SidePanel'
 import { Legend } from '../components/ui/Legend'
 import { DataTable, type DataTableColumn } from '../components/ui/DataTable'
+import { YearSelect } from '../components/ui/YearSelect'
 import { useLanguage } from '../i18n/LanguageContext'
-import { sampleKpis } from '../mock/kpis'
+import { getKpisForYear } from '../mock/kpis'
 import {
   accessibilityColor,
+  getDistrictRowsForYear,
   sampleComparisonDistricts,
   sampleDistrictOptions,
-  sampleDistrictRows,
   sampleOpenSpaceTypes,
   type DistrictRow,
 } from '../mock/districts'
 import { accessibilityLegendSteps } from '../mock/accessibilityLegend'
+import { availableYears, defaultYear, type Year } from '../mock/years'
 
 // Purely presentational — this page is dev-only scaffolding for checking
 // components against the design, not shipped product copy.
@@ -103,8 +105,10 @@ export function ComponentsPreviewPage() {
   const [range, setRange] = useState<[number, number]>([22, 85])
   const [panelCollapsed, setPanelCollapsed] = useState(false)
   const [district, setDistrict] = useState(sampleDistrictOptions[0].value)
+  const [previewYear, setPreviewYear] = useState<Year>(defaultYear)
 
-  const featuredDistrict = sampleDistrictRows.find((row) => row.id === 'chatuchak')!
+  const districtRows = getDistrictRowsForYear(previewYear)
+  const featuredDistrict = districtRows.find((row) => row.id === 'chatuchak')!
 
   return (
     <div className="min-h-screen bg-bg p-8">
@@ -215,9 +219,14 @@ export function ComponentsPreviewPage() {
           </Card>
         </Section>
 
+        <Section title="YearSelect">
+          <YearSelect years={availableYears} value={previewYear} onChange={setPreviewYear} />
+          <p className="mt-2 text-xs text-slate">Drives the KpiCard and DataTable sections below.</p>
+        </Section>
+
         <Section title="KpiCard">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-            {sampleKpis.map((kpi) => (
+            {getKpisForYear(previewYear).map((kpi) => (
               <KpiCard key={kpi.id} icon={KPI_ICONS[kpi.id]} value={kpi.value} label={kpi.label} tone={kpi.tone} />
             ))}
           </div>
@@ -280,12 +289,12 @@ export function ComponentsPreviewPage() {
         <Section title="DataTable">
           <DataTable
             columns={TABLE_COLUMNS}
-            rows={sampleDistrictRows}
+            rows={districtRows}
             getRowId={(row) => row.id}
             defaultSortKey="accessibilityPct"
             footer={
               <>
-                <span>Showing {sampleDistrictRows.length} of 50 districts</span>
+                <span>Showing {districtRows.length} of 50 districts</span>
                 <span>All figures are sample data for demonstration</span>
               </>
             }
