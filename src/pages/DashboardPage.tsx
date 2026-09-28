@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { Card } from '../components/ui/Card'
 import { DataTable, type DataTableColumn } from '../components/ui/DataTable'
 import { KpiCard } from '../components/ui/KpiCard'
@@ -7,14 +7,12 @@ import { Select } from '../components/ui/Select'
 import { YearSelect } from '../components/ui/YearSelect'
 import { useLanguage } from '../i18n/LanguageContext'
 import { useYear } from '../state/YearContext'
+import { useArea } from '../state/AreaContext'
+import type { AreaLevel, AreaRow } from '../mock/areas'
 import { getKpisForYear } from '../mock/kpis'
-import {
-  accessibilityColor,
-  getAccessibilityBrackets,
-  getDistrictRowsForYear,
-  sampleDistrictOptions,
-  type DistrictRow,
-} from '../mock/districts'
+import { accessibilityColor, getAccessibilityBrackets, getDistrictOptions } from '../mock/districts'
+import { getAllSubDistrictOptions } from '../mock/subdistricts'
+import { getAreaMeta, getAreaRowsForYear } from '../mock/areaIndex'
 
 const KPI_ICONS: Record<string, ReactNode> = {
   accessibility: (
@@ -52,12 +50,12 @@ const KPI_ICONS: Record<string, ReactNode> = {
 export function DashboardPage() {
   const { t } = useLanguage()
   const { year, setYear, years } = useYear()
+  const { level, setLevel, districtId, setDistrictId, subDistrictId, setSubDistrictId } = useArea()
 
-  const [adminLevel, setAdminLevel] = useState<'district' | 'sub-district'>('district')
-  const [areaFilter, setAreaFilter] = useState('all')
-
-  const allRows = getDistrictRowsForYear(year)
-  const filteredRows = areaFilter === 'all' ? allRows : allRows.filter((row) => row.id === areaFilter)
+  const isSubDistrict = level === 'sub-district'
+  const allRows = getAreaRowsForYear(level, year)
+  const areaFilterValue = isSubDistrict ? subDistrictId : districtId
+  const filteredRows = areaFilterValue === 'all' ? allRows : allRows.filter((row) => row.id === areaFilterValue)
   const kpis = getKpisForYear(year)
   const brackets = getAccessibilityBrackets(allRows)
 
@@ -65,10 +63,25 @@ export function DashboardPage() {
   const highestRows = rankedRows.slice(0, 3)
   const lowestRows = rankedRows.slice(-3)
 
-  const areaOptions = [{ value: 'all', label: t.dashboard.areaSelectAllLabel }, ...sampleDistrictOptions]
+  const areaOptions = isSubDistrict
+    ? [{ value: 'all', label: t.dashboard.areaSelectAllSubDistrictsLabel }, ...getAllSubDistrictOptions()]
+    : [{ value: 'all', label: t.dashboard.areaSelectAllLabel }, ...getDistrictOptions()]
 
-  const columns: DataTableColumn<DistrictRow>[] = [
-    { key: 'name', header: t.dashboard.columns.district, render: (row) => <span className="font-semibold">{row.name}</span> },
+  const columns: DataTableColumn<AreaRow>[] = [
+    {
+      key: 'name',
+      header: isSubDistrict ? t.dashboard.columns.subDistrict : t.dashboard.columns.district,
+      render: (row) => <span className="font-semibold">{row.name}</span>,
+    },
+    ...(isSubDistrict
+      ? ([
+          {
+            key: 'parent',
+            header: t.dashboard.columns.district,
+            render: (row: AreaRow) => getAreaMeta(row.id)?.parentName ?? '—',
+          },
+        ] as DataTableColumn<AreaRow>[])
+      : []),
     {
       key: 'population',
       header: t.dashboard.columns.population,
@@ -111,14 +124,19 @@ export function DashboardPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           <SegmentedControl
-            value={adminLevel}
-            onChange={(value) => setAdminLevel(value as 'district' | 'sub-district')}
+            value={level}
+            onChange={(value) => setLevel(value as AreaLevel)}
             options={[
               { value: 'district', label: t.adminLevel.district },
               { value: 'sub-district', label: t.adminLevel.subDistrict },
             ]}
           />
-          <Select options={areaOptions} value={areaFilter} onChange={(event) => setAreaFilter(event.target.value)} className="w-44" />
+          <Select
+            options={areaOptions}
+            value={areaFilterValue}
+            onChange={(event) => (isSubDistrict ? setSubDistrictId(event.target.value) : setDistrictId(event.target.value))}
+            className="w-44"
+          />
           <YearSelect years={years} value={year} onChange={setYear} formatOption={(y) => `${t.dashboard.analysisYear} ${y}`} />
         </div>
       </div>
@@ -130,7 +148,10 @@ export function DashboardPage() {
       </div>
 
       <div className="mb-6 grid gap-6 lg:grid-cols-2">
-        <Card title={t.dashboard.byDistrictCardTitle} note={t.common.sampleDataTag}>
+        <Card
+          title={isSubDistrict ? t.dashboard.byDistrictCardTitleSubDistrict : t.dashboard.byDistrictCardTitle}
+          note={t.common.sampleDataTag}
+        >
           <div className="flex gap-[18px]">
             <div className="flex h-[220px] w-[220px] flex-none items-center justify-center rounded-lg border border-dashed border-line-2 text-center text-xs text-slate">
               {t.map.mapPlaceholder}
@@ -141,7 +162,7 @@ export function DashboardPage() {
                   <span className="h-[13px] w-[13px] flex-none rounded-[3px]" style={{ background: bracket.color }} />
                   {bracket.label} {t.dashboard.bracketAccessibilitySuffix}
                   <b className="ml-auto font-bold text-ink">
-                    {bracket.count} {t.dashboard.bracketCountSuffix}
+                    {bracket.count} {isSubDistrict ? t.dashboard.bracketCountSuffixSubDistrict : t.dashboard.bracketCountSuffix}
                   </b>
                 </div>
               ))}
@@ -149,7 +170,10 @@ export function DashboardPage() {
           </div>
         </Card>
 
-        <Card title={t.dashboard.rankingCardTitle} note={t.common.sampleDataTag}>
+        <Card
+          title={isSubDistrict ? t.dashboard.rankingCardTitleSubDistrict : t.dashboard.rankingCardTitle}
+          note={t.common.sampleDataTag}
+        >
           {highestRows.map((row) => (
             <RankingRow key={row.id} row={row} />
           ))}
@@ -160,7 +184,7 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      <Card title={t.dashboard.tableCardTitle} note={t.common.sampleDataTag}>
+      <Card title={isSubDistrict ? t.dashboard.tableCardTitleSubDistrict : t.dashboard.tableCardTitle} note={t.common.sampleDataTag}>
         <DataTable
           columns={columns}
           rows={filteredRows}
@@ -168,7 +192,11 @@ export function DashboardPage() {
           defaultSortKey="accessibilityPct"
           footer={
             <>
-              <span>{t.dashboard.tableFooter.replace('{shown}', String(filteredRows.length)).replace('{total}', String(allRows.length))}</span>
+              <span>
+                {(isSubDistrict ? t.dashboard.tableFooterSubDistrict : t.dashboard.tableFooter)
+                  .replace('{shown}', String(filteredRows.length))
+                  .replace('{total}', String(allRows.length))}
+              </span>
               <span>{t.common.sampleDataTag}</span>
             </>
           }
@@ -178,7 +206,7 @@ export function DashboardPage() {
   )
 }
 
-function RankingRow({ row }: { row: DistrictRow }) {
+function RankingRow({ row }: { row: AreaRow }) {
   return (
     <div className="grid grid-cols-[100px_1fr_44px] items-center gap-2.5 py-[6px]">
       <span className="truncate text-[12.5px] font-semibold text-ink">{row.name}</span>

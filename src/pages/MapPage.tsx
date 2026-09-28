@@ -8,21 +8,21 @@ import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
 import { SidePanel } from '../components/ui/SidePanel'
 import { Toggle } from '../components/ui/Toggle'
+import { TrendLine } from '../components/ui/TrendLine'
 import { YearSelect } from '../components/ui/YearSelect'
 import { Button } from '../components/ui/Button'
 import { useLanguage } from '../i18n/LanguageContext'
 import { useYear } from '../state/YearContext'
+import { useArea } from '../state/AreaContext'
+import type { AreaLevel } from '../mock/areas'
 import { accessibilityLegendSteps } from '../mock/accessibilityLegend'
 import { basemapOptions } from '../mock/basemaps'
-import {
-  getAreaIndicators,
-  getCoverage,
-  getDistrictRow,
-  sampleDistrictOptions,
-  sampleOpenSpaceTypes,
-} from '../mock/districts'
+import { areaHasAnyData, getAreaMeta, getAreaRow, getFirstAreaId, getMetricSeries } from '../mock/areaIndex'
+import { getAreaIndicators, getCoverage } from '../mock/areas'
+import { getDistrictOptions, sampleOpenSpaceTypes } from '../mock/districts'
+import { getSubDistrictOptions } from '../mock/subdistricts'
 import { mapLayers } from '../mock/mapLayers'
-import { nearbySpaces } from '../mock/nearbySpaces'
+import { getNearbySpaces } from '../mock/nearbySpaces'
 
 const NEARBY_ICONS: Record<string, ReactNode> = {
   'Urban park': <TreeIcon />,
@@ -34,6 +34,7 @@ const NEARBY_ICONS: Record<string, ReactNode> = {
 export function MapPage() {
   const { t } = useLanguage()
   const { year, setYear, years } = useYear()
+  const { level, setLevel, districtId, setDistrictId, subDistrictId, setSubDistrictId } = useArea()
 
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [rightCollapsed, setRightCollapsed] = useState(false)
@@ -41,14 +42,21 @@ export function MapPage() {
     Object.fromEntries(mapLayers.map((layer) => [layer.id, layer.defaultOn])),
   )
   const [selectedType, setSelectedType] = useState(sampleOpenSpaceTypes[0])
-  const [district, setDistrict] = useState('district-d')
   const [range, setRange] = useState<[number, number]>([22, 85])
-  const [adminLevel, setAdminLevel] = useState<'district' | 'sub-district'>('district')
   const [basemap, setBasemap] = useState(basemapOptions[0].value)
 
-  const districtRow = getDistrictRow(district, year)!
-  const { covered, notCovered } = getCoverage(districtRow)
-  const { openSpaceSharePct, streetsPct, builtUpOpenPct } = getAreaIndicators(districtRow)
+  const districtOptions = getDistrictOptions()
+  const effectiveDistrictId = districtId === 'all' ? getFirstAreaId('district') : districtId
+  const subDistrictOptions = [
+    { value: 'all', label: t.filters.allSubDistricts },
+    ...getSubDistrictOptions(effectiveDistrictId),
+  ]
+
+  const focusAreaId = level === 'sub-district' && subDistrictId !== 'all' ? subDistrictId : effectiveDistrictId
+  const focusMeta = getAreaMeta(focusAreaId)
+  const focusRow = getAreaRow(focusAreaId, year)
+  const focusHasAnyData = areaHasAnyData(focusAreaId)
+  const trendSeries = getMetricSeries(focusAreaId, 'accessibilityPct')
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -85,11 +93,22 @@ export function MapPage() {
           <div className="mb-3.5">
             <Select
               label={t.map.districtLabel}
-              options={sampleDistrictOptions}
-              value={district}
-              onChange={(event) => setDistrict(event.target.value)}
+              options={districtOptions}
+              value={effectiveDistrictId}
+              onChange={(event) => setDistrictId(event.target.value)}
             />
           </div>
+
+          {level === 'sub-district' && (
+            <div className="mb-3.5">
+              <Select
+                label={t.filters.subDistrict}
+                options={subDistrictOptions}
+                value={subDistrictId}
+                onChange={(event) => setSubDistrictId(event.target.value)}
+              />
+            </div>
+          )}
 
           <div className="mb-3.5">
             <FieldLabel>{t.map.accessibilityRangeLabel}</FieldLabel>
@@ -99,8 +118,8 @@ export function MapPage() {
           <div className="mb-3.5">
             <FieldLabel>{t.map.adminLevelLabel}</FieldLabel>
             <SegmentedControl
-              value={adminLevel}
-              onChange={(value) => setAdminLevel(value as 'district' | 'sub-district')}
+              value={level}
+              onChange={(value) => setLevel(value as AreaLevel)}
               options={[
                 { value: 'district', label: t.adminLevel.district },
                 { value: 'sub-district', label: t.adminLevel.subDistrict },
@@ -161,38 +180,69 @@ export function MapPage() {
           </>
         }
       >
-        <h2 className="text-xl font-bold text-ink">{districtRow.name}</h2>
+        {focusMeta?.level === 'sub-district' && (
+          <p className="mb-1 text-[11.5px] font-semibold text-slate">
+            {focusMeta.parentName} <span className="text-mist">›</span> {focusMeta.name}
+          </p>
+        )}
+        <h2 className="text-xl font-bold text-ink">{focusMeta?.name}</h2>
         <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-bold text-green-800">
           <GridIcon />
-          {t.adminLevel.district} level
+          {focusMeta?.level === 'sub-district' ? t.adminLevel.subDistrict : t.adminLevel.district} level
         </span>
 
-        <div className="mt-[18px] flex items-center gap-[18px]">
-          <DonutChart percent={districtRow.accessibilityPct} centerLabel={`${districtRow.accessibilityPct}%`} subLabel={t.map.ofResidents} />
-          <p className="text-[12.5px] leading-[1.5] text-slate">{t.map.accessibilityDescription}</p>
-        </div>
+        {!focusRow ? (
+          <div className="mt-[18px] rounded-lg border border-dashed border-line-2 p-4 text-center">
+            <p className="text-[13px] font-semibold text-ink">{t.common.noDataTitle}</p>
+            <p className="mt-1 text-[12px] text-slate">{t.common.noDataBody.replace('{year}', String(year))}</p>
+          </div>
+        ) : (
+          <>
+            <div className="mt-[18px] flex items-center gap-[18px]">
+              <DonutChart percent={focusRow.accessibilityPct} centerLabel={`${focusRow.accessibilityPct}%`} subLabel={t.map.ofResidents} />
+              <p className="text-[12.5px] leading-[1.5] text-slate">{t.map.accessibilityDescription}</p>
+            </div>
 
-        <div className="mt-3.5 flex gap-2.5">
-          <StatBox value={covered} label={t.map.coveredLabel} dotColor="var(--color-green-600)" />
-          <StatBox value={notCovered} label={t.map.notCoveredLabel} dotColor="var(--color-accent-500)" />
-        </div>
+            <div className="mt-3.5 flex gap-2.5">
+              <StatBox value={getCoverage(focusRow).covered} label={t.map.coveredLabel} dotColor="var(--color-green-600)" />
+              <StatBox value={getCoverage(focusRow).notCovered} label={t.map.notCoveredLabel} dotColor="var(--color-accent-500)" />
+            </div>
 
-        <div className="mt-[18px]">
-          <SectionTitle>{t.map.sdgSectionTitle}</SectionTitle>
-          <ProgressBar className="mb-3" label={t.map.openSpaceShareLabel} valueLabel={`${openSpaceSharePct}%`} value={openSpaceSharePct} />
-          <ProgressBar
-            className="mb-3"
-            label={t.map.streetsLabel}
-            valueLabel={`${streetsPct}%`}
-            value={streetsPct}
-            color="var(--color-slate)"
-          />
-          <ProgressBar label={t.map.builtUpOpenLabel} valueLabel={`${builtUpOpenPct}%`} value={builtUpOpenPct} color="var(--color-accent-600)" />
-        </div>
+            <div className="mt-[18px]">
+              <SectionTitle>{t.map.sdgSectionTitle}</SectionTitle>
+              <ProgressBar
+                className="mb-3"
+                label={t.map.openSpaceShareLabel}
+                valueLabel={`${getAreaIndicators(focusRow).openSpaceSharePct}%`}
+                value={getAreaIndicators(focusRow).openSpaceSharePct}
+              />
+              <ProgressBar
+                className="mb-3"
+                label={t.map.streetsLabel}
+                valueLabel={`${getAreaIndicators(focusRow).streetsPct}%`}
+                value={getAreaIndicators(focusRow).streetsPct}
+                color="var(--color-slate)"
+              />
+              <ProgressBar
+                label={t.map.builtUpOpenLabel}
+                valueLabel={`${getAreaIndicators(focusRow).builtUpOpenPct}%`}
+                value={getAreaIndicators(focusRow).builtUpOpenPct}
+                color="var(--color-accent-600)"
+              />
+            </div>
+          </>
+        )}
+
+        {focusHasAnyData && (
+          <div className="mt-[18px]">
+            <SectionTitle>{t.map.trendSectionTitle}</SectionTitle>
+            <TrendLine points={trendSeries} highlightYears={[year]} />
+          </div>
+        )}
 
         <div className="mt-[18px]">
           <SectionTitle>{t.map.nearbySectionTitle}</SectionTitle>
-          {nearbySpaces.map((space) => (
+          {getNearbySpaces(focusAreaId).map((space) => (
             <div key={space.id} className="flex items-center gap-2.5 border-t border-line py-[9px] first:border-t-0">
               <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-green-100 text-green-700">
                 {NEARBY_ICONS[space.type]}

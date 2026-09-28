@@ -16,14 +16,8 @@ import { DataTable, type DataTableColumn } from '../components/ui/DataTable'
 import { YearSelect } from '../components/ui/YearSelect'
 import { useLanguage } from '../i18n/LanguageContext'
 import { getKpisForYear } from '../mock/kpis'
-import {
-  accessibilityColor,
-  getDistrictRowsForYear,
-  sampleComparisonDistricts,
-  sampleDistrictOptions,
-  sampleOpenSpaceTypes,
-  type DistrictRow,
-} from '../mock/districts'
+import { accessibilityColor, defaultComparisonAreas, getDistrictOptions, sampleOpenSpaceTypes, type AreaRow } from '../mock/districts'
+import { getAreaRowsForYear } from '../mock/areaIndex'
 import { accessibilityLegendSteps } from '../mock/accessibilityLegend'
 import { availableYears, defaultYear, type Year } from '../mock/years'
 
@@ -62,7 +56,7 @@ const KPI_ICONS: Record<string, ReactNode> = {
   ),
 }
 
-const TABLE_COLUMNS: DataTableColumn<DistrictRow>[] = [
+const TABLE_COLUMNS: DataTableColumn<AreaRow>[] = [
   {
     key: 'name',
     header: 'District',
@@ -92,18 +86,19 @@ const TABLE_COLUMNS: DataTableColumn<DistrictRow>[] = [
 export function ComponentsPreviewPage() {
   const { t } = useLanguage()
 
+  const districtOptions = getDistrictOptions()
   const [selectedTypes, setSelectedTypes] = useState<string[]>([sampleOpenSpaceTypes[0]])
-  const [comparisonDistricts, setComparisonDistricts] = useState(sampleComparisonDistricts)
+  const [comparisonDistricts, setComparisonDistricts] = useState(defaultComparisonAreas)
   const [layerOn, setLayerOn] = useState(true)
   const [serviceAreaOn, setServiceAreaOn] = useState(false)
   const [adminLevel, setAdminLevel] = useState<'district' | 'sub-district'>('district')
   const [range, setRange] = useState<[number, number]>([22, 85])
   const [panelCollapsed, setPanelCollapsed] = useState(false)
-  const [district, setDistrict] = useState(sampleDistrictOptions[0].value)
+  const [district, setDistrict] = useState(districtOptions[0].value)
   const [previewYear, setPreviewYear] = useState<Year>(defaultYear)
 
-  const districtRows = getDistrictRowsForYear(previewYear)
-  const featuredDistrict = districtRows.find((row) => row.id === 'chatuchak')!
+  const districtRows = getAreaRowsForYear('district', previewYear)
+  const featuredDistrict = districtRows.find((row) => row.id === 'district-d')!
 
   return (
     <div className="min-h-screen bg-bg p-8">
@@ -159,7 +154,7 @@ export function ComponentsPreviewPage() {
           <Select
             label="District"
             className="max-w-xs"
-            options={sampleDistrictOptions}
+            options={districtOptions}
             value={district}
             onChange={(event) => setDistrict(event.target.value)}
           />
