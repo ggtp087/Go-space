@@ -4,13 +4,13 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { useLanguage } from '../i18n/LanguageContext'
-import { departmentOptions, roleOptions } from '../mock/organization'
+import { departmentOptions, positionOptions } from '../mock/organization'
 
 export function RegisterPage() {
   const { t } = useLanguage()
   const navigate = useNavigate()
   const [department, setDepartment] = useState(departmentOptions[0].value)
-  const [role, setRole] = useState(roleOptions[0].value)
+  const [position, setPosition] = useState(positionOptions[0].value)
   const [agreedToTerms, setAgreedToTerms] = useState(true)
 
   return (
@@ -25,13 +25,21 @@ export function RegisterPage() {
           navigate('/map')
         }}
       >
-        <Input
-          label={t.auth.register.fullNameLabel}
-          type="text"
-          placeholder={t.auth.register.fullNamePlaceholder}
-          defaultValue="Nisa Phromsuwan"
-          icon={<PersonIcon />}
-        />
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label={t.auth.register.firstNameLabel}
+            type="text"
+            placeholder={t.auth.register.firstNamePlaceholder}
+            defaultValue="Nisa"
+            icon={<PersonIcon />}
+          />
+          <Input
+            label={t.auth.register.lastNameLabel}
+            type="text"
+            placeholder={t.auth.register.lastNamePlaceholder}
+            defaultValue="Phromsuwan"
+          />
+        </div>
         <Input
           label={t.auth.register.emailLabel}
           type="text"
@@ -48,10 +56,10 @@ export function RegisterPage() {
             onChange={(event) => setDepartment(event.target.value)}
           />
           <Select
-            label={t.auth.register.roleLabel}
-            options={roleOptions}
-            value={role}
-            onChange={(event) => setRole(event.target.value)}
+            label={t.auth.register.positionLabel}
+            options={positionOptions}
+            value={position}
+            onChange={(event) => setPosition(event.target.value)}
           />
         </div>
 

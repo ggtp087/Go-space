@@ -6,7 +6,7 @@ export const departmentOptions = [
   { value: 'traffic', label: 'Traffic & Transportation' },
 ]
 
-export const roleOptions = [
+export const positionOptions = [
   { value: 'urban-planner', label: 'Urban Planner' },
   { value: 'gis-analyst', label: 'GIS Analyst' },
   { value: 'policy-officer', label: 'Policy Officer' },

@@ -86,10 +86,9 @@ function ProfileTab() {
             onChange={(event) => setDepartment(event.target.value)}
           />
           <div>
-            <span className="mb-1.5 block text-[12.5px] font-semibold text-ink">{t.account.profileCard.roleLabel}</span>
-            <span className="inline-flex items-center gap-1.5 rounded-[9px] bg-green-100 px-3.5 py-[9px] text-[12.5px] font-bold text-green-800">
-              <ShieldIcon />
-              {currentUser.roleTitle} — {t.account.profileCard.roleBadgeSuffix}
+            <span className="mb-1.5 block text-[12.5px] font-semibold text-ink">{t.account.profileCard.positionLabel}</span>
+            <span className="inline-flex items-center rounded-[9px] bg-green-100 px-3.5 py-[9px] text-[12.5px] font-bold text-green-800">
+              {currentUser.position}
             </span>
           </div>
         </div>
@@ -147,10 +146,3 @@ function LockIcon() {
   )
 }
 
-function ShieldIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2 3 6v6c0 5 4 8.5 9 10 5-1.5 9-5 9-10V6l-9-4z" />
-    </svg>
-  )
-}

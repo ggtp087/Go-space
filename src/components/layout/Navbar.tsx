@@ -13,14 +13,24 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'bg-white/14 text-white font-semibold' : 'text-[#CFE3D6] hover:bg-white/8 hover:text-white'
   }`
 
+// Matches the users/user_profiles columns we have — no separate "name" or
+// "initials" field exists in the schema, so those are derived where shown.
 type CurrentUser = {
-  initials: string
-  name: string
-  role: string
+  firstName: string
+  lastName: string
+  position: string
 }
 
 type NavbarProps = {
   user: CurrentUser
+}
+
+function getInitials(user: CurrentUser): string {
+  return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
+}
+
+function getDisplayName(user: CurrentUser): string {
+  return `${user.firstName} ${user.lastName.charAt(0)}.`
 }
 
 export function Navbar({ user }: NavbarProps) {
@@ -232,11 +242,11 @@ function UserMenu({ user }: { user: CurrentUser }) {
         className="flex items-center gap-2 border-none bg-transparent text-white"
       >
         <span className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full bg-accent-500 text-xs font-bold text-white">
-          {user.initials}
+          {getInitials(user)}
         </span>
         <span className="text-left leading-tight">
-          <span className="block text-[13px] font-medium">{user.name}</span>
-          <span className="block text-[10.5px] text-[#A9C4B4]">{user.role}</span>
+          <span className="block text-[13px] font-medium">{getDisplayName(user)}</span>
+          <span className="block text-[10.5px] text-[#A9C4B4]">{user.position}</span>
         </span>
         <svg
           width="14"
