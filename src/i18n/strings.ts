@@ -178,9 +178,8 @@ export const en = {
     profileCard: {
       title: 'Personal information',
       subtitle: 'This information appears alongside your saved analyses and comparisons.',
-      uploadPhoto: 'Upload photo',
-      removePhoto: 'Remove',
-      fullNameLabel: 'Full name',
+      firstNameLabel: 'First name',
+      lastNameLabel: 'Last name',
       emailLabel: 'Email',
       departmentLabel: 'Department',
       roleLabel: 'Role',

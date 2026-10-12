@@ -49,6 +49,8 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
 
 function ProfileTab() {
   const { t } = useLanguage()
+  const [firstName, setFirstName] = useState(currentUser.firstName)
+  const [lastName, setLastName] = useState(currentUser.lastName)
   const [department, setDepartment] = useState(
     departmentOptions.find((option) => option.label === currentUser.department)?.value ?? departmentOptions[0].value,
   )
@@ -58,43 +60,46 @@ function ProfileTab() {
       <h3 className="mb-1 text-[15px] font-bold text-ink">{t.account.profileCard.title}</h3>
       <p className="mb-[22px] text-[12.5px] text-slate">{t.account.profileCard.subtitle}</p>
 
-      <div className="mb-6 flex items-center gap-4">
-        <span className="flex h-16 w-16 flex-none items-center justify-center rounded-full bg-accent-500 text-[22px] font-bold text-white">
-          {currentUser.initials}
-        </span>
-        <div className="flex gap-2">
-          <button type="button" className="h-[34px] rounded-lg border border-line-2 bg-white px-3.5 text-[12.5px] font-semibold text-ink">
-            {t.account.profileCard.uploadPhoto}
-          </button>
-          <button type="button" className="h-[34px] rounded-lg border border-transparent px-3.5 text-[12.5px] font-semibold text-slate">
-            {t.account.profileCard.removePhoto}
-          </button>
+      {/* Field names match the user table columns; no save endpoint exists yet. */}
+      <form onSubmit={(event) => event.preventDefault()}>
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label={t.account.profileCard.firstNameLabel}
+            name="first_name"
+            type="text"
+            value={firstName}
+            onChange={(event) => setFirstName(event.target.value)}
+          />
+          <Input
+            label={t.account.profileCard.lastNameLabel}
+            name="last_name"
+            type="text"
+            value={lastName}
+            onChange={(event) => setLastName(event.target.value)}
+          />
+          <Input label={t.account.profileCard.emailLabel} name="email" type="text" defaultValue={currentUser.email} disabled />
+          <Select
+            label={t.account.profileCard.departmentLabel}
+            name="department"
+            options={departmentOptions}
+            value={department}
+            onChange={(event) => setDepartment(event.target.value)}
+          />
+          <div>
+            <span className="mb-1.5 block text-[12.5px] font-semibold text-ink">{t.account.profileCard.roleLabel}</span>
+            <span className="inline-flex items-center gap-1.5 rounded-[9px] bg-green-100 px-3.5 py-[9px] text-[12.5px] font-bold text-green-800">
+              <ShieldIcon />
+              {currentUser.roleTitle} — {t.account.profileCard.roleBadgeSuffix}
+            </span>
+          </div>
         </div>
-      </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-4">
-        <Input label={t.account.profileCard.fullNameLabel} type="text" defaultValue={currentUser.fullName} />
-        <Input label={t.account.profileCard.emailLabel} type="text" defaultValue={currentUser.email} disabled />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <Select
-          label={t.account.profileCard.departmentLabel}
-          options={departmentOptions}
-          value={department}
-          onChange={(event) => setDepartment(event.target.value)}
-        />
-        <div>
-          <span className="mb-1.5 block text-[12.5px] font-semibold text-ink">{t.account.profileCard.roleLabel}</span>
-          <span className="inline-flex items-center gap-1.5 rounded-[9px] bg-green-100 px-3.5 py-[9px] text-[12.5px] font-bold text-green-800">
-            <ShieldIcon />
-            {currentUser.roleTitle} — {t.account.profileCard.roleBadgeSuffix}
-          </span>
+        <div className="mt-4 flex justify-end border-t border-line pt-[18px]">
+          <Button type="submit" variant="primary">
+            {t.account.profileCard.saveChanges}
+          </Button>
         </div>
-      </div>
-
-      <div className="mt-1.5 flex justify-end border-t border-line pt-[18px]">
-        <Button variant="primary">{t.account.profileCard.saveChanges}</Button>
-      </div>
+      </form>
     </Card>
   )
 }
