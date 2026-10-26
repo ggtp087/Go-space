@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { GeoJSON, MapContainer, Pane, ScaleControl, TileLayer, useMapEvents } from 'react-leaflet'
 import { circleMarker } from 'leaflet'
 import type { FitBoundsOptions, LatLng, LatLngBoundsExpression, LatLngTuple, Map as LeafletMap } from 'leaflet'
-import type { Feature, GeometryObject, Point } from 'geojson'
+import type { Feature, GeometryObject, MultiPolygon, Point, Position } from 'geojson'
 import 'leaflet/dist/leaflet.css'
 import {
+  getAllServiceAreasStyle,
   getDistrictFillOnlyStyle,
   getDistrictOutlineStyle,
+  getHighlightStyle,
   getNetworkStyle,
   getOpsPointStyle,
   getOpsTypeColor,
@@ -15,8 +17,9 @@ import {
   zoomPadding,
 } from '../config/mapStyle'
 import { getMapData, getOpsAnalysis, type Bbox, type OpsAnalysis } from '../mock/mapData'
-import { getDistrictFeature, getSubDistrictFeature } from '../mock/mapBoundaries'
-import { OPS_TYPE_LABELS, type OpsPointProperties } from '../mock/opsPoints'
+import { bangkokOutlineRing, getDistrictFeature, getSubDistrictFeature } from '../mock/mapBoundaries'
+import type { OpsPointProperties } from '../mock/opsPoints'
+import { opsTypeFilterValues, type OpsTypeFilter } from '../config/opsTypes'
 import { Chip } from '../components/ui/Chip'
 import { DonutChart } from '../components/ui/DonutChart'
 import { Legend } from '../components/ui/Legend'
@@ -32,13 +35,10 @@ import { Button } from '../components/ui/Button'
 import { useLanguage } from '../i18n/LanguageContext'
 import { useYear } from '../state/YearContext'
 import { useArea } from '../state/AreaContext'
-import type { AreaLevel } from '../mock/areas'
 import { accessibilityLegendSteps } from '../mock/accessibilityLegend'
 import { basemapOptions } from '../mock/basemaps'
-import { areaHasAnyData, getAreaMeta, getAreaRow, getFirstAreaId, getMetricSeries } from '../mock/areaIndex'
 import { getAreaIndicators, getCoverage } from '../mock/areas'
-import { getDistrictOptions, sampleOpenSpaceTypes } from '../mock/districts'
-import { getSubDistrictOptions } from '../mock/subdistricts'
+import { BANGKOK_AREA_ID, getMapAreaMeta, getMapAreaRow, getMapMetricSeries, mapAreaHasAnyData } from '../mock/mapAreaStats'
 import { mapLayers } from '../mock/mapLayers'
 import { getNearbySpaces } from '../mock/nearbySpaces'
 
@@ -83,20 +83,40 @@ function getAnalysisFitBoundsOptions(narrow: boolean): FitBoundsOptions {
   }
 }
 
+function ringToLatLngs(ring: Position[]): LatLngTuple[] {
+  return ring.map(([lon, lat]) => [lat, lon] as LatLngTuple)
+}
+
+/** The ring to fit the map to for the current district/sub-district selection — the sub-district if one's picked, else the district, else the whole Bangkok outline. */
+function getAreaFitLatLngs(districtId: string, subDistrictId: string): LatLngTuple[] {
+  if (subDistrictId !== 'all') {
+    const feature = getSubDistrictFeature(subDistrictId)
+    if (feature) return ringToLatLngs(feature.geometry.coordinates[0])
+  }
+  if (districtId !== 'all') {
+    const feature = getDistrictFeature(districtId)
+    // District geometry is a MultiPolygon (the union of its sub-districts) —
+    // flatten every member polygon's outer ring, since fitBounds just needs
+    // the full set of boundary points to compute its bounding box from.
+    if (feature) return feature.geometry.coordinates.flatMap((polygon) => ringToLatLngs(polygon[0]))
+  }
+  return ringToLatLngs(bangkokOutlineRing)
+}
+
 type SavedView = { center: LatLng; zoom: number }
 type OpsSelection = { opsId: string; mode: 'preview' | 'zoomed'; savedView: SavedView | null }
 
 export function MapPage() {
   const { t } = useLanguage()
   const { year, setYear, years } = useYear()
-  const { level, setLevel, districtId, setDistrictId, subDistrictId, setSubDistrictId } = useArea()
+  const { districtId, setDistrictId, subDistrictId, setSubDistrictId } = useArea()
 
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [rightCollapsed, setRightCollapsed] = useState(false)
   const [layerState, setLayerState] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(mapLayers.map((layer) => [layer.id, layer.defaultOn])),
   )
-  const [selectedType, setSelectedType] = useState(sampleOpenSpaceTypes[0])
+  const [selectedType, setSelectedType] = useState<OpsTypeFilter>('all')
   const [range, setRange] = useState<[number, number]>([22, 85])
   const [basemap, setBasemap] = useState(basemapOptions[0].value)
   const activeBasemap = basemapOptions.find((option) => option.value === basemap) ?? basemapOptions[0]
@@ -120,6 +140,68 @@ export function MapPage() {
 
   const isGisBasemap = basemap === 'gis'
 
+  const isWholeCity = districtId === 'all'
+  const districtOptions = useMemo(
+    () => [
+      { value: 'all', label: t.dashboard.areaSelectAllLabel },
+      ...mapData.districts.features.map((feature) => ({ value: feature.properties.id, label: feature.properties.name })),
+    ],
+    [mapData.districts, t.dashboard.areaSelectAllLabel],
+  )
+  const subDistrictOptions = useMemo(
+    () => [
+      { value: 'all', label: t.filters.allSubDistricts },
+      ...mapData.subDistricts.features
+        .filter((feature) => feature.properties.district_id === districtId)
+        .map((feature) => ({ value: feature.properties.id, label: feature.properties.name })),
+    ],
+    [mapData.subDistricts, districtId, t.filters.allSubDistricts],
+  )
+
+  // Identifies the current filter combination — used to force the ops/
+  // service-area GeoJSON layers (whose `data` prop only applies at
+  // creation) to remount when the visible set actually changes.
+  const visibleOpsFilterKey = `${selectedType}-${districtId}-${subDistrictId}`
+
+  // A point belongs to an area by its subdistrict_id → district_id — the
+  // same join the real primary_subdistrict_id column would drive. Kept
+  // separate from the type filter below (rather than one combined check) so
+  // effects further down can tell "excluded by area" from "excluded by
+  // type" apart — those two need different camera behavior when they drop
+  // the currently-selected park.
+  const visibleByAreaIdSet = useMemo(() => {
+    const subDistrictIdsInDistrict =
+      !isWholeCity && subDistrictId === 'all'
+        ? new Set(mapData.subDistricts.features.filter((f) => f.properties.district_id === districtId).map((f) => f.properties.id))
+        : null
+
+    const ids = mapData.opsPoints.features
+      .filter((feature) => {
+        if (subDistrictId !== 'all') return feature.properties.subdistrict_id === subDistrictId
+        if (subDistrictIdsInDistrict) return subDistrictIdsInDistrict.has(feature.properties.subdistrict_id)
+        return true
+      })
+      .map((feature) => feature.properties.id)
+    return new Set(ids)
+  }, [mapData.opsPoints, mapData.subDistricts, districtId, subDistrictId, isWholeCity])
+
+  // Combines (AND) with the open-space type chips.
+  const visibleOpsPoints = useMemo(() => {
+    const features = mapData.opsPoints.features.filter(
+      (feature) =>
+        visibleByAreaIdSet.has(feature.properties.id) && (selectedType === 'all' || feature.properties.ops_type === selectedType),
+    )
+    return { ...mapData.opsPoints, features }
+  }, [mapData.opsPoints, visibleByAreaIdSet, selectedType])
+
+  // The district/sub-district boundary currently selected — highlighted on
+  // the map regardless of the boundary-toggle state.
+  const highlightFeature = useMemo(() => {
+    if (subDistrictId !== 'all') return getSubDistrictFeature(subDistrictId)
+    if (districtId !== 'all') return getDistrictFeature(districtId)
+    return undefined
+  }, [districtId, subDistrictId])
+
   // One place for "which park, and are we just previewing it or zoomed into
   // its service area" — savedView is only ever set going into 'zoomed' and
   // only ever read coming back out of it, so manual panning/zooming while
@@ -142,12 +224,36 @@ export function MapPage() {
 
   // Re-styles every OPS circle marker in place (via GeoJSON.setStyle) rather
   // than rebuilding the 300-point layer — the `data`/`pointToLayer` props
-  // only apply once, at creation, but `style` is reactive.
-  const opsPointStyle = useMemo(
-    () => (feature?: Feature<GeometryObject, OpsPointProperties>) =>
-      feature ? getOpsPointStyle(feature.properties.ops_type, feature.properties.id === selectedOpsId) : {},
-    [selectedOpsId],
+  // only apply once, at creation, but `style` is reactive. Points the area/
+  // type filters exclude are styled invisible (radius 0) rather than
+  // removed from `data`, for the same reason: removing them would need a
+  // remount, which would also reset every marker's selection highlight.
+  const visibleOpsIdSet = useMemo(
+    () => new Set(visibleOpsPoints.features.map((feature) => feature.properties.id)),
+    [visibleOpsPoints],
   )
+  const opsPointStyle = useMemo(
+    () => (feature?: Feature<GeometryObject, OpsPointProperties>) => {
+      if (!feature) return {}
+      if (!visibleOpsIdSet.has(feature.properties.id)) return { radius: 0, weight: 0, fillOpacity: 0, opacity: 0 }
+      return getOpsPointStyle(feature.properties.ops_type, feature.properties.id === selectedOpsId)
+    },
+    [selectedOpsId, visibleOpsIdSet],
+  )
+
+  // "400 m service areas": every currently-visible park's own service area,
+  // combined into one MultiPolygon so it's a single layer. Recomputing
+  // getOpsAnalysis per point is mock-only work (pure trig, no layout), fine
+  // for the few dozen points a filtered view typically has.
+  const allServiceAreas = useMemo<MultiPolygon | null>(() => {
+    if (!layerState['service-areas']) return null
+    const polygons = visibleOpsPoints.features
+      .map((feature) => getOpsAnalysis(feature.properties.id, year))
+      .filter((analysis): analysis is OpsAnalysis => Boolean(analysis))
+      .map((analysis) => analysis.serviceArea.coordinates[0])
+    if (polygons.length === 0) return null
+    return { type: 'MultiPolygon', coordinates: polygons }
+  }, [layerState, visibleOpsPoints, year])
 
   // Clicking a park only ever opens it in preview — it never moves the map.
   // If a different park was zoomed in, that view gets restored first so its
@@ -183,6 +289,51 @@ export function MapPage() {
       setSelection(null)
     }
   }, [selection])
+
+  // Mirrors `selection` for the area-fit effect below, which deliberately
+  // doesn't list `selection` as a dependency (it must NOT re-fit the map
+  // just because a park was selected/deselected — only when the area filter
+  // itself changes) but still needs the current value when it does run.
+  const selectionRef = useRef<OpsSelection | null>(null)
+  useEffect(() => {
+    selectionRef.current = selection
+  }, [selection])
+
+  // Changing the district/sub-district filter always re-fits the map to the
+  // newly selected area (Bangkok outline for "all"). If that also drops the
+  // selected park, the selection is cleared outright — the fit below is the
+  // only camera move needed, no separate saved-view restore. Otherwise,
+  // being zoomed in is dropped back to preview (the new area fit replaces
+  // that view). Reads `selection` via the ref above rather than listing it
+  // as a dependency — this must fire only when the area filter changes.
+  useEffect(() => {
+    if (!map) return
+    const current = selectionRef.current
+    if (current) {
+      if (!visibleByAreaIdSet.has(current.opsId)) {
+        setSelection(null)
+      } else if (current.mode === 'zoomed') {
+        setSelection({ opsId: current.opsId, mode: 'preview', savedView: null })
+      }
+    }
+    map.fitBounds(getAreaFitLatLngs(districtId, subDistrictId), { padding: [40, 40] })
+  }, [map, districtId, subDistrictId, visibleByAreaIdSet])
+
+  // Changing the open-space type filter closes the card the normal way
+  // (restoring the saved view if it was zoomed in) when it alone drops the
+  // selected park — i.e. the park is still within the current area, just
+  // not this type. Area-driven drops are handled above instead, since
+  // those also need to move the camera to the new area rather than restore
+  // the old one.
+  useEffect(() => {
+    const current = selectionRef.current
+    if (!current) return
+    if (!visibleByAreaIdSet.has(current.opsId) || visibleOpsIdSet.has(current.opsId)) return
+    if (current.mode === 'zoomed' && current.savedView) {
+      mapRef.current?.flyTo(current.savedView.center, current.savedView.zoom, { duration: 0.6 })
+    }
+    setSelection(null)
+  }, [visibleOpsIdSet, visibleByAreaIdSet])
 
   // Resizes the map whenever its wrapper's box changes size — covers both
   // the left/right SidePanel collapse transitions and plain window resizes —
@@ -222,18 +373,13 @@ export function MapPage() {
     mapRef.current?.setView(BANGKOK_CENTER, BANGKOK_ZOOM)
   }
 
-  const districtOptions = getDistrictOptions()
-  const effectiveDistrictId = districtId === 'all' ? getFirstAreaId('district') : districtId
-  const subDistrictOptions = [
-    { value: 'all', label: t.filters.allSubDistricts },
-    ...getSubDistrictOptions(effectiveDistrictId),
-  ]
-
-  const focusAreaId = level === 'sub-district' && subDistrictId !== 'all' ? subDistrictId : effectiveDistrictId
-  const focusMeta = getAreaMeta(focusAreaId)
-  const focusRow = getAreaRow(focusAreaId, year)
-  const focusHasAnyData = areaHasAnyData(focusAreaId)
-  const trendSeries = getMetricSeries(focusAreaId, 'accessibilityPct')
+  // "All districts" → Bangkok-wide; a sub-district if one's picked, else the
+  // district if one's picked, else Bangkok again.
+  const focusAreaId = isWholeCity ? BANGKOK_AREA_ID : subDistrictId !== 'all' ? subDistrictId : districtId
+  const focusMeta = getMapAreaMeta(focusAreaId)
+  const focusRow = getMapAreaRow(focusAreaId, year)
+  const focusHasAnyData = mapAreaHasAnyData(focusAreaId)
+  const trendSeries = getMapMetricSeries(focusAreaId, 'accessibilityPct')
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -261,8 +407,13 @@ export function MapPage() {
           <div className="mb-3.5">
             <FieldLabel>{t.map.openSpaceTypeLabel}</FieldLabel>
             <div className="flex flex-wrap gap-1.5">
-              {sampleOpenSpaceTypes.map((type) => (
-                <Chip key={type} label={type} selected={selectedType === type} onSelect={() => setSelectedType(type)} />
+              {opsTypeFilterValues.map((value) => (
+                <Chip
+                  key={value}
+                  label={t.map.opsTypes[value]}
+                  selected={selectedType === value}
+                  onSelect={() => setSelectedType(value)}
+                />
               ))}
             </div>
           </div>
@@ -271,37 +422,24 @@ export function MapPage() {
             <Select
               label={t.map.districtLabel}
               options={districtOptions}
-              value={effectiveDistrictId}
+              value={districtId}
               onChange={(event) => setDistrictId(event.target.value)}
             />
           </div>
 
-          {level === 'sub-district' && (
-            <div className="mb-3.5">
-              <Select
-                label={t.filters.subDistrict}
-                options={subDistrictOptions}
-                value={subDistrictId}
-                onChange={(event) => setSubDistrictId(event.target.value)}
-              />
-            </div>
-          )}
+          <div className="mb-3.5">
+            <Select
+              label={t.filters.subDistrict}
+              options={subDistrictOptions}
+              value={subDistrictId}
+              onChange={(event) => setSubDistrictId(event.target.value)}
+              disabled={isWholeCity}
+            />
+          </div>
 
           <div className="mb-3.5">
             <FieldLabel>{t.map.accessibilityRangeLabel}</FieldLabel>
             <RangeSlider min={0} max={100} value={range} onChange={setRange} formatLabel={(v) => `${v}%`} />
-          </div>
-
-          <div className="mb-3.5">
-            <FieldLabel>{t.map.adminLevelLabel}</FieldLabel>
-            <SegmentedControl
-              value={level}
-              onChange={(value) => setLevel(value as AreaLevel)}
-              options={[
-                { value: 'district', label: t.adminLevel.district },
-                { value: 'sub-district', label: t.adminLevel.subDistrict },
-              ]}
-            />
           </div>
 
           <div>
@@ -337,15 +475,25 @@ export function MapPage() {
 
             {/* Each layer gets its own always-mounted Pane with a fixed
                 z-index, so bottom-to-top order (sub-district fill, service
-                area, district outline, network lines, OPS points) holds no
-                matter what sequence the toggles/selection are flipped in —
-                only the Panes' children mount or unmount, never the Panes
-                themselves. The district layer is split in two: its fill-only
-                stand-in (when sub-district boundaries are off) sits at the
-                same low tier as the sub-district fill, so its opaque gold
-                doesn't cover the service-area/network layers above; its
-                boundary line sits at the higher "district outline" tier. */}
-            <Pane name="subdistrict-pane" style={{ zIndex: 401 }}>
+                area, district outline, network lines, highlight, OPS points)
+                holds no matter what sequence the toggles/selection are
+                flipped in — only the Panes' children mount or unmount, never
+                the Panes themselves. The district layer is split in two: its
+                fill-only stand-in (when sub-district boundaries are off)
+                sits at the same low tier as the sub-district fill, so its
+                opaque gold doesn't cover the service-area/network layers
+                above; its boundary line sits at the higher "district
+                outline" tier.
+                ops-pane is deliberately the ONLY interactive pane, and the
+                topmost one: every other pane here gets pointer-events: none
+                on its container, so its canvas (preferCanvas gives each pane
+                its own full-map-size canvas, drawn on or not) never
+                intercepts a click meant for an OPS point beneath it — the
+                corresponding `interactive: false` on each layer's style is
+                belt-and-suspenders for Leaflet's own hit-testing, but
+                pointer-events is what actually makes the click fall through
+                to the pane below at the browser level. */}
+            <Pane name="subdistrict-pane" style={{ zIndex: 401, pointerEvents: 'none' }}>
               {layerState['subdistrict-boundaries'] && (
                 <GeoJSON data={mapData.subDistricts} style={getSubDistrictStyle(isGisBasemap)} />
               )}
@@ -354,7 +502,17 @@ export function MapPage() {
               )}
             </Pane>
 
-            <Pane name="service-area-pane" style={{ zIndex: 402 }}>
+            <Pane name="all-service-areas-pane" style={{ zIndex: 402, pointerEvents: 'none' }}>
+              {allServiceAreas && (
+                // Keyed by the actual filter values (not e.g. a point count,
+                // which two different same-size filtered sets could share)
+                // so GeoJSON's otherwise-inert `data` prop remounts whenever
+                // the visible set actually changes.
+                <GeoJSON key={visibleOpsFilterKey} data={allServiceAreas} style={getAllServiceAreasStyle()} />
+              )}
+            </Pane>
+
+            <Pane name="service-area-pane" style={{ zIndex: 403, pointerEvents: 'none' }}>
               {isZoomedIn && selectedOpsAnalysis && analysisVisibility.serviceArea && (
                 // Keyed by analysis id: GeoJSON's `data` prop only applies at
                 // creation, so switching parks needs a clean remount to pick
@@ -363,17 +521,21 @@ export function MapPage() {
               )}
             </Pane>
 
-            <Pane name="district-pane" style={{ zIndex: 403 }}>
+            <Pane name="district-pane" style={{ zIndex: 404, pointerEvents: 'none' }}>
               {layerState['district-boundaries'] && <GeoJSON data={mapData.districts} style={getDistrictOutlineStyle()} />}
             </Pane>
 
-            <Pane name="network-pane" style={{ zIndex: 404 }}>
+            <Pane name="network-pane" style={{ zIndex: 405, pointerEvents: 'none' }}>
               {isZoomedIn && selectedOpsAnalysis && analysisVisibility.network && (
                 <GeoJSON key={selectedOpsAnalysis.analysis_id} data={selectedOpsAnalysis.network} style={getNetworkStyle()} />
               )}
             </Pane>
 
-            <Pane name="ops-pane" style={{ zIndex: 405 }}>
+            <Pane name="highlight-pane" style={{ zIndex: 406, pointerEvents: 'none' }}>
+              {highlightFeature && <GeoJSON key={highlightFeature.properties.id} data={highlightFeature} style={getHighlightStyle()} />}
+            </Pane>
+
+            <Pane name="ops-pane" style={{ zIndex: 407 }}>
               {layerState['open-spaces'] && (
                 <GeoJSON
                   data={mapData.opsPoints}
@@ -393,7 +555,7 @@ export function MapPage() {
                   eventHandlers={{
                     click: (event) => {
                       const feature = event.propagatedFrom?.feature as Feature<Point, OpsPointProperties> | undefined
-                      if (feature) selectOps(feature.properties.id)
+                      if (feature && visibleOpsIdSet.has(feature.properties.id)) selectOps(feature.properties.id)
                     },
                   }}
                 />
@@ -458,6 +620,7 @@ export function MapPage() {
               <OpsPopupCard
                 point={selectedOpsFeature}
                 analysis={selectedOpsAnalysis}
+                typeLabel={t.map.opsTypes[selectedOpsFeature.properties.ops_type]}
                 subDistrictName={selectedSubDistrict?.properties.name}
                 districtName={selectedDistrict?.properties.name}
                 mode={isZoomedIn ? 'zoomed' : 'preview'}
@@ -486,15 +649,17 @@ export function MapPage() {
           </>
         }
       >
-        {focusMeta?.level === 'sub-district' && (
+        {subDistrictId !== 'all' && !isWholeCity && (
           <p className="mb-1 text-[11.5px] font-semibold text-slate">
-            {focusMeta.parentName} <span className="text-mist">›</span> {focusMeta.name}
+            {focusMeta?.parentName} <span className="text-mist">›</span> {focusMeta?.name}
           </p>
         )}
-        <h2 className="text-xl font-bold text-ink">{focusMeta?.name}</h2>
+        <h2 className="text-xl font-bold text-ink">{isWholeCity ? t.map.bangkokLabel : focusMeta?.name}</h2>
         <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-bold text-green-800">
           <GridIcon />
-          {focusMeta?.level === 'sub-district' ? t.adminLevel.subDistrict : t.adminLevel.district} level
+          {isWholeCity
+            ? t.map.bangkokLabel
+            : `${subDistrictId !== 'all' ? t.adminLevel.subDistrict : t.adminLevel.district} level`}
         </span>
 
         {!focusRow ? (
@@ -637,6 +802,7 @@ type OpsCardMode = 'preview' | 'zoomed'
 function OpsPopupCard({
   point,
   analysis,
+  typeLabel,
   subDistrictName,
   districtName,
   mode,
@@ -647,6 +813,7 @@ function OpsPopupCard({
 }: {
   point: Feature<Point, OpsPointProperties>
   analysis: OpsAnalysis
+  typeLabel: string
   subDistrictName?: string
   districtName?: string
   mode: OpsCardMode
@@ -676,7 +843,7 @@ function OpsPopupCard({
           className="inline-flex items-center rounded-full px-2 py-[3px] text-[10.5px] font-bold text-white"
           style={{ background: getOpsTypeColor(properties.ops_type) }}
         >
-          {OPS_TYPE_LABELS[properties.ops_type]}
+          {typeLabel}
         </span>
         {(districtName || subDistrictName) && (
           <span className="truncate text-[11px] text-slate">
