@@ -52,5 +52,3 @@ export const defaultComparisonAreas: ComparisonArea[] = [
   { id: 'district-d', name: 'District D', color: '#3F8F63', level: 'district' },
   { id: 'district-j', name: 'District J', color: '#C2660F', level: 'district' },
 ]
-
-export const sampleOpenSpaceTypes = ['All types', 'Parks', 'Urban forests', 'Playgrounds', 'Plazas', 'Sports fields']

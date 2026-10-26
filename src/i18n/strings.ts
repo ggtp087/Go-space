@@ -59,8 +59,6 @@ export const en = {
     notCoveredLabel: 'Not covered',
     sdgSectionTitle: 'SDG 11.7.1 area-based indicators',
     openSpaceShareLabel: 'Open public space share',
-    streetsLabel: 'Land allocated to streets',
-    builtUpOpenLabel: 'Built-up area open for public use',
     nearbySectionTitle: 'Nearby public spaces',
     addToComparison: 'Add to comparison',
     trendSectionTitle: 'Accessibility, 2017–2026',

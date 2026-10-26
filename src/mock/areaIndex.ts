@@ -44,7 +44,7 @@ export function getFirstAreaId(level: AreaLevel): string {
 
 export { getDistrictOptions, getSubDistrictParentId }
 
-export type MetricKey = 'accessibilityPct' | 'openSpaceSharePct' | 'streetsPct' | 'builtUpOpenPct'
+export type MetricKey = 'accessibilityPct' | 'openSpaceSharePct'
 
 export type MetricPoint = { year: Year; value: number | null }
 

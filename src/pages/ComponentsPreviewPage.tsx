@@ -16,10 +16,11 @@ import { DataTable, type DataTableColumn } from '../components/ui/DataTable'
 import { YearSelect } from '../components/ui/YearSelect'
 import { useLanguage } from '../i18n/LanguageContext'
 import { getKpisForYear } from '../mock/kpis'
-import { accessibilityColor, defaultComparisonAreas, getDistrictOptions, sampleOpenSpaceTypes, type AreaRow } from '../mock/districts'
+import { accessibilityColor, defaultComparisonAreas, getDistrictOptions, type AreaRow } from '../mock/districts'
 import { getAreaRowsForYear } from '../mock/areaIndex'
 import { accessibilityLegendSteps } from '../mock/accessibilityLegend'
 import { availableYears, defaultYear, type Year } from '../mock/years'
+import { opsTypeValues } from '../config/opsTypes'
 
 // Purely presentational — this page is dev-only scaffolding for checking
 // components against the design, not shipped product copy.
@@ -87,7 +88,7 @@ export function ComponentsPreviewPage() {
   const { t } = useLanguage()
 
   const districtOptions = getDistrictOptions()
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([sampleOpenSpaceTypes[0]])
+  const [selectedTypes, setSelectedTypes] = useState<(typeof opsTypeValues)[number][]>([opsTypeValues[0]])
   const [comparisonDistricts, setComparisonDistricts] = useState(defaultComparisonAreas)
   const [layerOn, setLayerOn] = useState(true)
   const [serviceAreaOn, setServiceAreaOn] = useState(false)
@@ -176,10 +177,10 @@ export function ComponentsPreviewPage() {
         <Section title="Chip">
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              {sampleOpenSpaceTypes.map((type) => (
+              {opsTypeValues.map((type) => (
                 <Chip
                   key={type}
-                  label={type}
+                  label={t.map.opsTypes[type]}
                   selected={selectedTypes.includes(type)}
                   onSelect={() =>
                     setSelectedTypes((current) =>
@@ -261,10 +262,10 @@ export function ComponentsPreviewPage() {
               footer={<Button variant="primary" fullWidth>Add to comparison</Button>}
             >
               <div className="space-y-3">
-                {sampleOpenSpaceTypes.slice(0, 3).map((type) => (
+                {opsTypeValues.slice(0, 3).map((type) => (
                   <div key={type} className="flex items-center justify-between">
-                    <span className="text-[13.5px] text-ink">{type}</span>
-                    <Toggle checked label={type} onChange={() => {}} />
+                    <span className="text-[13.5px] text-ink">{t.map.opsTypes[type]}</span>
+                    <Toggle checked label={t.map.opsTypes[type]} onChange={() => {}} />
                   </div>
                 ))}
               </div>

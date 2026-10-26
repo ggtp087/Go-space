@@ -117,8 +117,6 @@ export function ComparePage() {
   const metricGroups: { key: MetricKey; label: string }[] = [
     { key: 'accessibilityPct', label: t.compare.metricAccessibility },
     { key: 'openSpaceSharePct', label: t.map.openSpaceShareLabel },
-    { key: 'streetsPct', label: t.map.streetsLabel },
-    { key: 'builtUpOpenPct', label: t.map.builtUpOpenLabel },
   ]
 
   function metricValue(row: AreaRow | undefined, metric: MetricKey): number | null {
@@ -325,27 +323,11 @@ export function ComparePage() {
 
                 <div className="mt-4">
                   <ProgressBar
-                    className="mb-2.5"
                     size="sm"
                     label={t.map.openSpaceShareLabel}
                     valueLabel={`${getAreaIndicators(item.row).openSpaceSharePct}%`}
                     value={getAreaIndicators(item.row).openSpaceSharePct}
                     color={item.color}
-                  />
-                  <ProgressBar
-                    className="mb-2.5"
-                    size="sm"
-                    label={t.map.streetsLabel}
-                    valueLabel={`${getAreaIndicators(item.row).streetsPct}%`}
-                    value={getAreaIndicators(item.row).streetsPct}
-                    color="var(--color-slate)"
-                  />
-                  <ProgressBar
-                    size="sm"
-                    label={t.map.builtUpOpenLabel}
-                    valueLabel={`${getAreaIndicators(item.row).builtUpOpenPct}%`}
-                    value={getAreaIndicators(item.row).builtUpOpenPct}
-                    color="var(--color-accent-600)"
                   />
                 </div>
               </>

@@ -116,13 +116,13 @@ export function getCoverage(row: AreaRow): { covered: number; notCovered: number
 }
 
 /**
- * SDG 11.7.1 area-based indicators. Built-up area open for public use is kept
- * larger than the open space share by construction, per the site's data rules.
+ * SDG 11.7.1 area-based indicator in scope for this project (Eq. 2.1): share
+ * of open public space. (Eq. 2.2/2.3 — land allocated to streets, built-up
+ * area open for public use — are out of scope: no street width/right-of-way
+ * data.)
  */
-export function getAreaIndicators(row: AreaRow): { openSpaceSharePct: number; streetsPct: number; builtUpOpenPct: number } {
-  const streetsPct = Math.round(row.opsSharePct * 1.15 * 10) / 10
-  const builtUpOpenPct = Math.round(row.opsSharePct * 1.4 * 10) / 10
-  return { openSpaceSharePct: row.opsSharePct, streetsPct, builtUpOpenPct }
+export function getAreaIndicators(row: AreaRow): { openSpaceSharePct: number } {
+  return { openSpaceSharePct: row.opsSharePct }
 }
 
 export type AccessibilityBracket = {

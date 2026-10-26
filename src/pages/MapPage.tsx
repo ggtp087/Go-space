@@ -682,23 +682,9 @@ export function MapPage() {
             <div className="mt-[18px]">
               <SectionTitle>{t.map.sdgSectionTitle}</SectionTitle>
               <ProgressBar
-                className="mb-3"
                 label={t.map.openSpaceShareLabel}
                 valueLabel={`${getAreaIndicators(focusRow).openSpaceSharePct}%`}
                 value={getAreaIndicators(focusRow).openSpaceSharePct}
-              />
-              <ProgressBar
-                className="mb-3"
-                label={t.map.streetsLabel}
-                valueLabel={`${getAreaIndicators(focusRow).streetsPct}%`}
-                value={getAreaIndicators(focusRow).streetsPct}
-                color="var(--color-slate)"
-              />
-              <ProgressBar
-                label={t.map.builtUpOpenLabel}
-                valueLabel={`${getAreaIndicators(focusRow).builtUpOpenPct}%`}
-                value={getAreaIndicators(focusRow).builtUpOpenPct}
-                color="var(--color-accent-600)"
               />
             </div>
           </>

@@ -114,7 +114,7 @@ export function mapAreaHasAnyData(id: string): boolean {
   return allSeeds.some((seed) => seed.id === id)
 }
 
-export type MapMetricKey = 'accessibilityPct' | 'openSpaceSharePct' | 'streetsPct' | 'builtUpOpenPct'
+export type MapMetricKey = 'accessibilityPct' | 'openSpaceSharePct'
 export type MapMetricPoint = { year: Year; value: number | null }
 
 /** One metric's value across every sample year for a map area — null where data is missing. */
