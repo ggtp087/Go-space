@@ -1,5 +1,5 @@
 import type { CircleMarkerOptions, PathOptions } from 'leaflet'
-import type { OpsType } from '../mock/opsPoints'
+import type { OpsType } from './opsTypes'
 
 // Single source of truth for the map's GIS-mode rendering — colors and
 // weights only, so these can be tweaked without touching MapPage's
@@ -24,12 +24,14 @@ export const mapStyle = {
     color: '#333333',
     weight: 0.5,
     fillOpacity: 1,
+    // Chosen to stay distinct from each other and from the GIS gold fill,
+    // the green service-area overlay, and the red network line, on GIS,
+    // OSM, and Satellite basemaps alike.
     colorsByType: {
-      park: '#2D6A4F',
-      urban_forest: '#1B4332',
-      playground: '#E08A2A',
-      plaza: '#4E5A52',
-      sports_field: '#2563EB',
+      open_space: '#2563EB',
+      public_park: '#16A34A',
+      park_15min: '#EA580C',
+      sports_ground: '#7C3AED',
     } satisfies Record<OpsType, string>,
     // Applied to whichever point is currently selected, on top of its own
     // ops_type fill color.
@@ -40,6 +42,10 @@ export const mapStyle = {
   serviceArea: {
     fillColor: '#2E7D5B',
     fillOpacity: 0.25,
+    // Used for every visible park's service area (the "400 m service areas"
+    // layer) when more than just the selected park's own is shown — lighter
+    // so the selected park's service area still reads as the "main" one.
+    allFillOpacity: 0.15,
     color: '#2E7D5B',
     weight: 1.5,
   },
@@ -47,6 +53,13 @@ export const mapStyle = {
     // Reads clearly over both the golden GIS fills and the green service area.
     color: '#E11D48',
     weight: 3,
+  },
+  // Selected district/sub-district boundary — drawn regardless of the
+  // district/sub-district boundary toggles, so picking an area always shows
+  // where it is.
+  highlight: {
+    color: '#111111',
+    weight: 4,
   },
 }
 
@@ -68,8 +81,15 @@ export const zoomPadding = {
  * tiles stay visible underneath.
  */
 export function getSubDistrictStyle(filled: boolean): PathOptions {
-  if (!filled) return { color: mapStyle.subDistrict.color, weight: mapStyle.subDistrict.weight, fill: false }
-  return { color: mapStyle.subDistrict.color, weight: mapStyle.subDistrict.weight, fillColor: mapStyle.subDistrict.fillColor, fillOpacity: mapStyle.subDistrict.fillOpacity, fill: true }
+  if (!filled) return { color: mapStyle.subDistrict.color, weight: mapStyle.subDistrict.weight, fill: false, interactive: false }
+  return {
+    color: mapStyle.subDistrict.color,
+    weight: mapStyle.subDistrict.weight,
+    fillColor: mapStyle.subDistrict.fillColor,
+    fillOpacity: mapStyle.subDistrict.fillOpacity,
+    fill: true,
+    interactive: false,
+  }
 }
 
 /**
@@ -77,7 +97,7 @@ export function getSubDistrictStyle(filled: boolean): PathOptions {
  * service-area/network analysis layers, per the stated bottom-to-top order.
  */
 export function getDistrictOutlineStyle(): PathOptions {
-  return { color: mapStyle.district.color, weight: mapStyle.district.weight, fill: false }
+  return { color: mapStyle.district.color, weight: mapStyle.district.weight, fill: false, interactive: false }
 }
 
 /**
@@ -88,7 +108,7 @@ export function getDistrictOutlineStyle(): PathOptions {
  * pane would otherwise sit on top of and hide the service-area/network layers.
  */
 export function getDistrictFillOnlyStyle(): PathOptions {
-  return { fillColor: mapStyle.district.fillColor, fillOpacity: mapStyle.district.fillOpacity, fill: true, stroke: false }
+  return { fillColor: mapStyle.district.fillColor, fillOpacity: mapStyle.district.fillOpacity, fill: true, stroke: false, interactive: false }
 }
 
 export function getOpsPointStyle(opsType: OpsType, selected = false): CircleMarkerOptions {
@@ -112,9 +132,26 @@ export function getServiceAreaStyle(): PathOptions {
     fillColor: mapStyle.serviceArea.fillColor,
     fillOpacity: mapStyle.serviceArea.fillOpacity,
     fill: true,
+    interactive: false,
   }
 }
 
 export function getNetworkStyle(): PathOptions {
-  return { color: mapStyle.network.color, weight: mapStyle.network.weight }
+  return { color: mapStyle.network.color, weight: mapStyle.network.weight, interactive: false }
+}
+
+/** Lighter twin of getServiceAreaStyle, for the "400 m service areas" layer covering every visible park at once. */
+export function getAllServiceAreasStyle(): PathOptions {
+  return {
+    color: mapStyle.serviceArea.color,
+    weight: mapStyle.serviceArea.weight,
+    fillColor: mapStyle.serviceArea.fillColor,
+    fillOpacity: mapStyle.serviceArea.allFillOpacity,
+    fill: true,
+    interactive: false,
+  }
+}
+
+export function getHighlightStyle(): PathOptions {
+  return { color: mapStyle.highlight.color, weight: mapStyle.highlight.weight, fill: false, interactive: false }
 }
