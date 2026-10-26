@@ -1,4 +1,4 @@
-import type { Feature, FeatureCollection, Polygon, Position } from 'geojson'
+import type { Feature, FeatureCollection, MultiPolygon, Polygon, Position } from 'geojson'
 
 // Generic mock map geometry for the GIS basemap — independent of the
 // district/sub-district dataset in mock/districts.ts and mock/subdistricts.ts
@@ -100,17 +100,19 @@ function districtMacroCellFor(lon: number, lat: number): { col: number; row: num
 }
 
 function buildBoundaries(): {
-  districts: FeatureCollection<Polygon, DistrictProperties>
+  districts: FeatureCollection<MultiPolygon, DistrictProperties>
   subDistricts: FeatureCollection<Polygon, SubDistrictProperties>
 } {
   const subDistrictCells = buildGrid(GRID_COLS, GRID_ROWS).filter((cell) =>
     isPointInBangkokOutline([cell.centerLon, cell.centerLat]),
   )
 
-  // Assign each surviving sub-district cell to its macro-cell, and give each
-  // populated macro-cell a sequential district id/name in scan order.
+  // The macro-grid is only a deterministic GROUPING key here: each
+  // sub-district's center falls in exactly one macro-cell, which is why
+  // `district_id` below is single-valued by construction (every sub-district
+  // gets exactly one). It is NOT used to draw the district's own shape
+  // anymore — see districtFeatures below.
   const districtKeyToId = new Map<string, string>()
-  const districtCells = new Map<string, { col: number; row: number }>()
   let nextDistrictNumber = 1
 
   const subDistrictFeatures: Feature<Polygon, SubDistrictProperties>[] = subDistrictCells.map((cell, index) => {
@@ -120,7 +122,6 @@ function buildBoundaries(): {
     if (!districtId) {
       districtId = `geo-district-${nextDistrictNumber}`
       districtKeyToId.set(key, districtId)
-      districtCells.set(districtId, macro)
       nextDistrictNumber += 1
     }
 
@@ -132,18 +133,24 @@ function buildBoundaries(): {
     }
   })
 
-  const districtW = (GRID_LON_MAX - GRID_LON_MIN) / DISTRICT_COLS
-  const districtH = (GRID_LAT_MAX - GRID_LAT_MIN) / DISTRICT_ROWS
-  const districtFeatures: Feature<Polygon, DistrictProperties>[] = Array.from(districtCells.entries()).map(
-    ([districtId, macro], index) => {
-      const minLon = GRID_LON_MIN + macro.col * districtW
-      const minLat = GRID_LAT_MIN + macro.row * districtH
-      return {
-        type: 'Feature',
-        properties: { id: districtId, name: `District ${index + 1}` },
-        geometry: { type: 'Polygon', coordinates: [rectangleRing(minLon, minLat, minLon + districtW, minLat + districtH)] },
-      }
-    },
+  // A district's geometry is the union of its own sub-districts' rectangles
+  // — a MultiPolygon made of their exact cells — rather than a separately
+  // drawn macro-grid rectangle. That guarantees it can never extend past (or
+  // overlap a neighboring district's) sub-district area, since sub-district
+  // cells themselves never overlap each other.
+  const memberCellsByDistrict = new Map<string, Feature<Polygon, SubDistrictProperties>[]>()
+  for (const feature of subDistrictFeatures) {
+    const list = memberCellsByDistrict.get(feature.properties.district_id) ?? []
+    list.push(feature)
+    memberCellsByDistrict.set(feature.properties.district_id, list)
+  }
+
+  const districtFeatures: Feature<MultiPolygon, DistrictProperties>[] = Array.from(memberCellsByDistrict.entries()).map(
+    ([districtId, members], index) => ({
+      type: 'Feature',
+      properties: { id: districtId, name: `District ${index + 1}` },
+      geometry: { type: 'MultiPolygon', coordinates: members.map((feature) => feature.geometry.coordinates) },
+    }),
   )
 
   return {
@@ -155,11 +162,37 @@ function buildBoundaries(): {
 const { districts: mockDistrictBoundaries, subDistricts: mockSubDistrictBoundaries } = buildBoundaries()
 export { mockDistrictBoundaries, mockSubDistrictBoundaries }
 
+if (import.meta.env.DEV) validateSubDistrictAssignment()
+
+/**
+ * Dev-only guard for the rule the rest of this module relies on: every
+ * sub-district id is unique and belongs to exactly one district. A failure
+ * here means a future edit to the grouping/grid logic broke that invariant.
+ */
+function validateSubDistrictAssignment(): void {
+  const districtIdsById = new Map<string, Set<string>>()
+
+  for (const feature of mockSubDistrictBoundaries.features) {
+    const { id, district_id } = feature.properties
+    const districtIds = districtIdsById.get(id)
+    if (districtIds) console.error(`[mapBoundaries] duplicate sub-district id: ${id}`)
+    const set = districtIds ?? new Set<string>()
+    if (district_id) set.add(district_id)
+    districtIdsById.set(id, set)
+  }
+
+  for (const [id, districtIds] of districtIdsById) {
+    if (districtIds.size !== 1) {
+      console.error(`[mapBoundaries] sub-district ${id} maps to ${districtIds.size} districts: ${[...districtIds].join(', ')}`)
+    }
+  }
+}
+
 export function getSubDistrictFeature(id: string): Feature<Polygon, SubDistrictProperties> | undefined {
   return mockSubDistrictBoundaries.features.find((feature) => feature.properties.id === id)
 }
 
-export function getDistrictFeature(id: string): Feature<Polygon, DistrictProperties> | undefined {
+export function getDistrictFeature(id: string): Feature<MultiPolygon, DistrictProperties> | undefined {
   return mockDistrictBoundaries.features.find((feature) => feature.properties.id === id)
 }
 

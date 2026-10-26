@@ -1,12 +1,11 @@
 import type { Feature, FeatureCollection, Point } from 'geojson'
+import { opsTypeValues, type OpsType } from '../config/opsTypes'
 import { findSubDistrictId, isPointInBangkokOutline, OUTLINE_CENTER } from './mapBoundaries'
 
 // ~300 mock public open-space points scattered inside the Bangkok outline,
 // denser toward the center. Fully deterministic (fixed seed, no
 // Math.random) so the set is identical on every reload.
 
-export const OPS_TYPES = ['park', 'urban_forest', 'playground', 'plaza', 'sports_field'] as const
-export type OpsType = (typeof OPS_TYPES)[number]
 export type OpsPointProperties = {
   id: string
   name: string
@@ -17,22 +16,23 @@ export type OpsPointProperties = {
   subdistrict_id: string
 }
 
-export const OPS_TYPE_LABELS: Record<OpsType, string> = {
-  park: 'Park',
-  urban_forest: 'Urban Forest',
-  playground: 'Playground',
-  plaza: 'Plaza',
-  sports_field: 'Sports Field',
+// English-only, used purely to build each mock point's placeholder `name`
+// (like "District A"/"Sub-district 12" elsewhere, these names stay English
+// regardless of UI language) — display labels for the UI go through i18n.
+const POINT_NAME_EN: Record<OpsType, string> = {
+  open_space: 'Open Space',
+  public_park: 'Public Park',
+  park_15min: '15-Minute Park',
+  sports_ground: 'Sports Ground',
 }
 
 // Rough, plausible size range per type (m²) — just enough spread that the
 // popup's area figure doesn't look identical across points of the same type.
 const AREA_RANGE_SQM: Record<OpsType, [number, number]> = {
-  park: [5_000, 40_000],
-  urban_forest: [10_000, 80_000],
-  playground: [300, 2_000],
-  plaza: [500, 5_000],
-  sports_field: [2_000, 15_000],
+  open_space: [2_000, 60_000],
+  public_park: [5_000, 40_000],
+  park_15min: [1_000, 8_000],
+  sports_ground: [2_000, 15_000],
 }
 
 const AGENCIES = [
@@ -60,7 +60,7 @@ function pseudoRandom01(seed: number): number {
 
 function buildOpsPoints(): FeatureCollection<Point, OpsPointProperties> {
   const features: Feature<Point, OpsPointProperties>[] = []
-  const typeCounters: Record<OpsType, number> = { park: 0, urban_forest: 0, playground: 0, plaza: 0, sports_field: 0 }
+  const typeCounters: Record<OpsType, number> = { open_space: 0, public_park: 0, park_15min: 0, sports_ground: 0 }
 
   let candidate = 0
   while (features.length < TARGET_POINT_COUNT && candidate < MAX_CANDIDATES) {
@@ -77,7 +77,7 @@ function buildOpsPoints(): FeatureCollection<Point, OpsPointProperties> {
     const lat = OUTLINE_CENTER[1] + Math.sin(angle) * MAX_RADIUS_LAT * radiusFrac
     if (!isPointInBangkokOutline([lon, lat])) continue
 
-    const opsType = OPS_TYPES[Math.floor(uType * OPS_TYPES.length)]
+    const opsType = opsTypeValues[Math.floor(uType * opsTypeValues.length)]
     typeCounters[opsType] += 1
     const id = `geo-ops-${features.length + 1}`
 
@@ -92,7 +92,7 @@ function buildOpsPoints(): FeatureCollection<Point, OpsPointProperties> {
       type: 'Feature',
       properties: {
         id,
-        name: `${OPS_TYPE_LABELS[opsType]} ${typeCounters[opsType]}`,
+        name: `${POINT_NAME_EN[opsType]} ${typeCounters[opsType]}`,
         ops_type: opsType,
         area_sqm: areaSqm,
         agency,
