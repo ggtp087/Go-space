@@ -1,10 +1,22 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { GeoJSON, MapContainer, Pane, ScaleControl, TileLayer } from 'react-leaflet'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { GeoJSON, MapContainer, Pane, ScaleControl, TileLayer, useMapEvents } from 'react-leaflet'
 import { circleMarker } from 'leaflet'
-import type { LatLngBoundsExpression, LatLngTuple, Map as LeafletMap } from 'leaflet'
+import type { FitBoundsOptions, LatLng, LatLngBoundsExpression, LatLngTuple, Map as LeafletMap } from 'leaflet'
+import type { Feature, GeometryObject, Point } from 'geojson'
 import 'leaflet/dist/leaflet.css'
-import { getDistrictStyle, getOpsPointStyle, getSubDistrictStyle } from '../config/mapStyle'
-import { getMapData, type Bbox } from '../mock/mapData'
+import {
+  getDistrictFillOnlyStyle,
+  getDistrictOutlineStyle,
+  getNetworkStyle,
+  getOpsPointStyle,
+  getOpsTypeColor,
+  getServiceAreaStyle,
+  getSubDistrictStyle,
+  zoomPadding,
+} from '../config/mapStyle'
+import { getMapData, getOpsAnalysis, type Bbox, type OpsAnalysis } from '../mock/mapData'
+import { getDistrictFeature, getSubDistrictFeature } from '../mock/mapBoundaries'
+import { OPS_TYPE_LABELS, type OpsPointProperties } from '../mock/opsPoints'
 import { Chip } from '../components/ui/Chip'
 import { DonutChart } from '../components/ui/DonutChart'
 import { Legend } from '../components/ui/Legend'
@@ -54,6 +66,26 @@ const MAX_BOUNDS_VISCOSITY = 0.8
 // arrives (the mock data ignores bbox entirely, so this is mostly cosmetic).
 const FALLBACK_BBOX: Bbox = [100.2, 13.4, 101.05, 14.05]
 
+// OPS analysis card layout. Below this map-area width, the card docks to the
+// bottom as a sheet instead of the top-right corner.
+const NARROW_MAP_BREAKPOINT = 640
+// Caps how far "Zoom to service area" zooms in — a ~300-400 m-wide area
+// doesn't need to go past neighborhood scale.
+const ANALYSIS_MAX_ZOOM = 16
+
+/** Keeps the service-area/network geometry clear of the docked analysis card, on whichever side it's docked to. */
+function getAnalysisFitBoundsOptions(narrow: boolean): FitBoundsOptions {
+  const padding = narrow ? zoomPadding.narrow : zoomPadding.wide
+  return {
+    paddingTopLeft: [padding.left, padding.top],
+    paddingBottomRight: [padding.right, padding.bottom],
+    maxZoom: ANALYSIS_MAX_ZOOM,
+  }
+}
+
+type SavedView = { center: LatLng; zoom: number }
+type OpsSelection = { opsId: string; mode: 'preview' | 'zoomed'; savedView: SavedView | null }
+
 export function MapPage() {
   const { t } = useLanguage()
   const { year, setYear, years } = useYear()
@@ -71,40 +103,112 @@ export function MapPage() {
 
   const mapRef = useRef<LeafletMap | null>(null)
   const mapWrapperRef = useRef<HTMLDivElement | null>(null)
+  // MapContainer's forwarded ref (mapRef) only resolves on a second render
+  // pass (react-leaflet wires it up via state internally), so it's still
+  // null during any mount-time effect here. This state, set from the
+  // MapEventBridge child below (which reads the map via context instead),
+  // is what mount-time effects that need the map instance should use.
+  const [map, setMap] = useState<LeafletMap | null>(null)
   // Captured on every moveend; currently just feeds getMapData (which ignores
   // it), ready to drive a real bbox-filtered fetch once the backend exists.
   const [bbox, setBbox] = useState<Bbox | null>(null)
   const mapData = useMemo(() => getMapData(bbox ?? FALLBACK_BBOX), [bbox])
 
+  // Drives the analysis card's docked-corner vs. bottom-sheet layout.
+  const [mapAreaWidth, setMapAreaWidth] = useState(0)
+  const isNarrowMapArea = mapAreaWidth > 0 && mapAreaWidth < NARROW_MAP_BREAKPOINT
+
   const isGisBasemap = basemap === 'gis'
 
+  // One place for "which park, and are we just previewing it or zoomed into
+  // its service area" — savedView is only ever set going into 'zoomed' and
+  // only ever read coming back out of it, so manual panning/zooming while
+  // zoomed can't drift it.
+  const [selection, setSelection] = useState<OpsSelection | null>(null)
+  const [analysisVisibility, setAnalysisVisibility] = useState({ network: true, serviceArea: true })
+
+  const selectedOpsId = selection?.opsId
+  const selectedOpsFeature = useMemo(
+    () => (selectedOpsId ? mapData.opsPoints.features.find((feature) => feature.properties.id === selectedOpsId) : undefined),
+    [mapData.opsPoints, selectedOpsId],
+  )
+  const selectedOpsAnalysis = useMemo<OpsAnalysis | undefined>(
+    () => (selectedOpsId ? getOpsAnalysis(selectedOpsId, year) : undefined),
+    [selectedOpsId, year],
+  )
+  const selectedSubDistrict = selectedOpsFeature && getSubDistrictFeature(selectedOpsFeature.properties.subdistrict_id)
+  const selectedDistrict = selectedSubDistrict && getDistrictFeature(selectedSubDistrict.properties.district_id)
+  const isZoomedIn = selection?.mode === 'zoomed'
+
+  // Re-styles every OPS circle marker in place (via GeoJSON.setStyle) rather
+  // than rebuilding the 300-point layer — the `data`/`pointToLayer` props
+  // only apply once, at creation, but `style` is reactive.
+  const opsPointStyle = useMemo(
+    () => (feature?: Feature<GeometryObject, OpsPointProperties>) =>
+      feature ? getOpsPointStyle(feature.properties.ops_type, feature.properties.id === selectedOpsId) : {},
+    [selectedOpsId],
+  )
+
+  // Clicking a park only ever opens it in preview — it never moves the map.
+  // If a different park was zoomed in, that view gets restored first so its
+  // layers/padding don't linger under the newly selected park.
+  function selectOps(id: string) {
+    if (selection?.mode === 'zoomed' && selection.savedView) {
+      mapRef.current?.setView(selection.savedView.center, selection.savedView.zoom)
+    }
+    setSelection({ opsId: id, mode: 'preview', savedView: null })
+  }
+
+  // The only way into 'zoomed': saves the view that was current right
+  // before fitting to the service area, so it can be restored later.
+  function handleZoomToServiceArea() {
+    if (!selection || !selectedOpsAnalysis || !mapRef.current) return
+    const currentMap = mapRef.current
+    const savedView: SavedView = { center: currentMap.getCenter(), zoom: currentMap.getZoom() }
+    const latLngs = selectedOpsAnalysis.serviceArea.coordinates.flat(2).map(([lon, lat]) => [lat, lon] as LatLngTuple)
+    currentMap.fitBounds(latLngs, getAnalysisFitBoundsOptions(isNarrowMapArea))
+    setAnalysisVisibility({ network: true, serviceArea: true })
+    setSelection({ opsId: selection.opsId, mode: 'zoomed', savedView })
+  }
+
+  // Shared by the ×, Esc, and empty-map-click paths. Leaving 'zoomed' flies
+  // back to the saved view and drops to 'preview' for the same park (so a
+  // second close fully clears it); leaving 'preview' clears the selection.
+  const closeOrExitZoom = useCallback(() => {
+    if (!selection) return
+    if (selection.mode === 'zoomed' && selection.savedView) {
+      mapRef.current?.flyTo(selection.savedView.center, selection.savedView.zoom, { duration: 0.6 })
+      setSelection({ opsId: selection.opsId, mode: 'preview', savedView: null })
+    } else {
+      setSelection(null)
+    }
+  }, [selection])
+
   // Resizes the map whenever its wrapper's box changes size — covers both
-  // the left/right SidePanel collapse transitions and plain window resizes,
-  // so the map never gets left mis-sized after a layout change.
+  // the left/right SidePanel collapse transitions and plain window resizes —
+  // and tracks its width, which decides whether the analysis card docks to
+  // the top-right corner or the bottom as a sheet.
   useEffect(() => {
-    const map = mapRef.current
     const wrapperEl = mapWrapperRef.current
     if (!map || !wrapperEl) return
-    const resizeObserver = new ResizeObserver(() => map.invalidateSize())
+    const resizeObserver = new ResizeObserver((entries) => {
+      map.invalidateSize()
+      setMapAreaWidth(entries[0].contentRect.width)
+    })
     resizeObserver.observe(wrapperEl)
     return () => resizeObserver.disconnect()
-  }, [])
+  }, [map])
 
-  // Tracks the current viewport bbox for future GeoJSON overlay fetching.
+  const handleMoveEnd = useCallback((nextBbox: Bbox) => setBbox(nextBbox), [])
+
+  // Escape closes the card (or exits 'zoomed' back to 'preview').
   useEffect(() => {
-    const map = mapRef.current
-    if (!map) return
-
-    const handleMoveEnd = () => {
-      const bounds = map.getBounds()
-      setBbox([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()])
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') closeOrExitZoom()
     }
-    handleMoveEnd()
-    map.on('moveend', handleMoveEnd)
-    return () => {
-      map.off('moveend', handleMoveEnd)
-    }
-  }, [])
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [closeOrExitZoom])
 
   function handleZoomIn() {
     mapRef.current?.zoomIn()
@@ -232,40 +336,73 @@ export function MapPage() {
             )}
 
             {/* Each layer gets its own always-mounted Pane with a fixed
-                z-index, so bottom-to-top order (sub-district fill, district
-                outline, OPS points) holds no matter what sequence the
-                toggles are flipped in — only the Panes' children mount or
-                unmount, never the Panes themselves. */}
+                z-index, so bottom-to-top order (sub-district fill, service
+                area, district outline, network lines, OPS points) holds no
+                matter what sequence the toggles/selection are flipped in —
+                only the Panes' children mount or unmount, never the Panes
+                themselves. The district layer is split in two: its fill-only
+                stand-in (when sub-district boundaries are off) sits at the
+                same low tier as the sub-district fill, so its opaque gold
+                doesn't cover the service-area/network layers above; its
+                boundary line sits at the higher "district outline" tier. */}
             <Pane name="subdistrict-pane" style={{ zIndex: 401 }}>
               {layerState['subdistrict-boundaries'] && (
                 <GeoJSON data={mapData.subDistricts} style={getSubDistrictStyle(isGisBasemap)} />
               )}
-            </Pane>
-
-            <Pane name="district-pane" style={{ zIndex: 402 }}>
-              {layerState['district-boundaries'] && (
-                <GeoJSON
-                  data={mapData.districts}
-                  style={getDistrictStyle(isGisBasemap && !layerState['subdistrict-boundaries'])}
-                />
+              {isGisBasemap && layerState['district-boundaries'] && !layerState['subdistrict-boundaries'] && (
+                <GeoJSON data={mapData.districts} style={getDistrictFillOnlyStyle()} />
               )}
             </Pane>
 
-            <Pane name="ops-pane" style={{ zIndex: 403 }}>
+            <Pane name="service-area-pane" style={{ zIndex: 402 }}>
+              {isZoomedIn && selectedOpsAnalysis && analysisVisibility.serviceArea && (
+                // Keyed by analysis id: GeoJSON's `data` prop only applies at
+                // creation, so switching parks needs a clean remount to pick
+                // up the new geometry.
+                <GeoJSON key={selectedOpsAnalysis.analysis_id} data={selectedOpsAnalysis.serviceArea} style={getServiceAreaStyle()} />
+              )}
+            </Pane>
+
+            <Pane name="district-pane" style={{ zIndex: 403 }}>
+              {layerState['district-boundaries'] && <GeoJSON data={mapData.districts} style={getDistrictOutlineStyle()} />}
+            </Pane>
+
+            <Pane name="network-pane" style={{ zIndex: 404 }}>
+              {isZoomedIn && selectedOpsAnalysis && analysisVisibility.network && (
+                <GeoJSON key={selectedOpsAnalysis.analysis_id} data={selectedOpsAnalysis.network} style={getNetworkStyle()} />
+              )}
+            </Pane>
+
+            <Pane name="ops-pane" style={{ zIndex: 405 }}>
               {layerState['open-spaces'] && (
                 <GeoJSON
                   data={mapData.opsPoints}
+                  style={opsPointStyle}
                   pointToLayer={(feature, latlng) =>
                     // A custom pointToLayer bypasses the GeoJSON layer's own pane option, so
                     // the target pane has to be set explicitly here too, or these fall back
                     // to the default overlayPane and render below the fills above them.
-                    circleMarker(latlng, { ...getOpsPointStyle(feature.properties.ops_type), pane: 'ops-pane' })
+                    // bubblingMouseEvents: false keeps a marker click from also reaching the
+                    // map's own click handler, which would immediately clear the selection.
+                    circleMarker(latlng, {
+                      ...getOpsPointStyle(feature.properties.ops_type, false),
+                      pane: 'ops-pane',
+                      bubblingMouseEvents: false,
+                    })
                   }
+                  eventHandlers={{
+                    click: (event) => {
+                      const feature = event.propagatedFrom?.feature as Feature<Point, OpsPointProperties> | undefined
+                      if (feature) selectOps(feature.properties.id)
+                    },
+                  }}
                 />
               )}
             </Pane>
 
             <ScaleControl position="bottomright" imperial={false} />
+
+            <MapEventBridge onReady={setMap} onMoveEnd={handleMoveEnd} onClick={closeOrExitZoom} />
           </MapContainer>
         </div>
 
@@ -273,14 +410,11 @@ export function MapPage() {
             (restored per-control below) so empty space still lets drags/
             scroll-zoom reach the map underneath. */}
         <div className="pointer-events-none absolute inset-0 z-10">
-          <SegmentedControl
-            value={basemap}
-            onChange={setBasemap}
-            options={basemapOptions}
-            className="pointer-events-auto absolute left-5 top-5 w-auto shadow-card"
-          />
+          {/* Basemap switcher and zoom controls share this top-left stack so
+              the top-right corner stays free for the docked analysis card. */}
+          <div className="pointer-events-auto absolute left-5 top-5 flex flex-col items-start gap-2">
+            <SegmentedControl value={basemap} onChange={setBasemap} options={basemapOptions} className="w-auto shadow-card" />
 
-          <div className="pointer-events-auto absolute right-5 top-5 flex flex-col gap-2">
             <div className="flex flex-col overflow-hidden rounded-[9px] border border-line bg-white shadow-card">
               <button
                 type="button"
@@ -312,6 +446,28 @@ export function MapPage() {
           <div className="pointer-events-auto absolute bottom-5 left-5">
             <Legend title={t.map.legendTitle} note={t.map.legendNote} steps={accessibilityLegendSteps} />
           </div>
+
+          {selectedOpsFeature && selectedOpsAnalysis && (
+            <div
+              className={`pointer-events-auto absolute overflow-y-auto rounded-xl bg-card shadow-card-lg ${
+                isNarrowMapArea
+                  ? 'inset-x-3 bottom-3 max-h-[70%]'
+                  : 'right-5 top-5 w-[280px] max-h-[calc(100%-40px)]'
+              }`}
+            >
+              <OpsPopupCard
+                point={selectedOpsFeature}
+                analysis={selectedOpsAnalysis}
+                subDistrictName={selectedSubDistrict?.properties.name}
+                districtName={selectedDistrict?.properties.name}
+                mode={isZoomedIn ? 'zoomed' : 'preview'}
+                visibility={analysisVisibility}
+                onToggleVisibility={(key) => setAnalysisVisibility((current) => ({ ...current, [key]: !current[key] }))}
+                onZoomToServiceArea={handleZoomToServiceArea}
+                onClose={closeOrExitZoom}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -412,6 +568,37 @@ export function MapPage() {
   )
 }
 
+/**
+ * Renders nothing — just a place to call react-leaflet's map hooks, which
+ * read the map instance from context rather than MapContainer's forwarded
+ * ref (unlike the ref, context is already populated by the time a child here
+ * renders, so this is the reliable way to reach the map from a mount-time
+ * effect in the parent).
+ */
+function MapEventBridge({
+  onReady,
+  onMoveEnd,
+  onClick,
+}: {
+  onReady: (map: LeafletMap) => void
+  onMoveEnd: (bbox: Bbox) => void
+  onClick: () => void
+}) {
+  const map = useMapEvents({
+    moveend: () => {
+      const bounds = map.getBounds()
+      onMoveEnd([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()])
+    },
+    click: onClick,
+  })
+
+  useEffect(() => {
+    onReady(map)
+  }, [map, onReady])
+
+  return null
+}
+
 function SectionTitle({ children }: { children: ReactNode }) {
   return <div className="mb-2.5 text-[11px] font-bold uppercase tracking-[.6px] text-mist">{children}</div>
 }
@@ -429,6 +616,128 @@ function StatBox({ value, label, dotColor }: { value: number; label: string; dot
         {label}
       </div>
     </div>
+  )
+}
+
+function formatSqm(value: number): string {
+  return `${value.toLocaleString()} m²`
+}
+
+function formatKm(meters: number): string {
+  return `${(meters / 1000).toFixed(2)} km`
+}
+
+function formatSqKm(sqm: number): string {
+  return `${(sqm / 1_000_000).toFixed(3)} km²`
+}
+
+type AnalysisVisibility = { network: boolean; serviceArea: boolean }
+type OpsCardMode = 'preview' | 'zoomed'
+
+function OpsPopupCard({
+  point,
+  analysis,
+  subDistrictName,
+  districtName,
+  mode,
+  visibility,
+  onToggleVisibility,
+  onZoomToServiceArea,
+  onClose,
+}: {
+  point: Feature<Point, OpsPointProperties>
+  analysis: OpsAnalysis
+  subDistrictName?: string
+  districtName?: string
+  mode: OpsCardMode
+  visibility: AnalysisVisibility
+  onToggleVisibility: (key: keyof AnalysisVisibility) => void
+  onZoomToServiceArea: () => void
+  onClose: () => void
+}) {
+  const { properties } = point
+  const isZoomed = mode === 'zoomed'
+  return (
+    <div className="w-full p-3.5">
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-[14px] font-bold leading-tight text-ink">{properties.name}</h3>
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className="-mr-1 -mt-1 flex h-6 w-6 flex-none items-center justify-center rounded-full text-mist hover:bg-black/5 hover:text-ink"
+        >
+          <CloseIcon />
+        </button>
+      </div>
+
+      <div className="mt-1.5 flex items-center gap-1.5">
+        <span
+          className="inline-flex items-center rounded-full px-2 py-[3px] text-[10.5px] font-bold text-white"
+          style={{ background: getOpsTypeColor(properties.ops_type) }}
+        >
+          {OPS_TYPE_LABELS[properties.ops_type]}
+        </span>
+        {(districtName || subDistrictName) && (
+          <span className="truncate text-[11px] text-slate">
+            {districtName}
+            {districtName && subDistrictName && <span className="text-mist"> › </span>}
+            {subDistrictName}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-line pt-2.5">
+        <PopupStat label="Area" value={formatSqm(properties.area_sqm)} />
+        <PopupStat label="Opened" value={String(properties.opened_year)} />
+        <PopupStat label="Agency" value={properties.agency} className="col-span-2" />
+      </div>
+
+      <div className="mt-3 border-t border-line pt-1">
+        <div className="flex items-center justify-between py-1.5">
+          <div>
+            <div className="text-[12px] font-semibold text-ink">Network</div>
+            <div className="text-[11px] text-slate">{formatKm(analysis.networkLengthM)} within 400 m</div>
+          </div>
+          {isZoomed && <Toggle checked={visibility.network} onChange={() => onToggleVisibility('network')} label="Network" />}
+        </div>
+        <div className="flex items-center justify-between py-1.5">
+          <div>
+            <div className="text-[12px] font-semibold text-ink">Service area</div>
+            <div className="text-[11px] text-slate">
+              {formatSqKm(analysis.serviceAreaSqm)} · {analysis.populationCovered.toLocaleString()} covered
+            </div>
+          </div>
+          {isZoomed && (
+            <Toggle checked={visibility.serviceArea} onChange={() => onToggleVisibility('serviceArea')} label="Service area" />
+          )}
+        </div>
+      </div>
+
+      {!isZoomed && (
+        <Button variant="secondary" fullWidth className="mt-2.5 h-9 text-[12.5px]" onClick={onZoomToServiceArea}>
+          Zoom to service area
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function PopupStat({ label, value, className = '' }: { label: string; value: string; className?: string }) {
+  return (
+    <div className={className}>
+      <div className="text-[10.5px] uppercase tracking-[.4px] text-mist">{label}</div>
+      <div className="truncate text-[12.5px] font-semibold text-ink">{value}</div>
+    </div>
+  )
+}
+
+function CloseIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round">
+      <line x1="5" y1="5" x2="19" y2="19" />
+      <line x1="19" y1="5" x2="5" y2="19" />
+    </svg>
   )
 }
 

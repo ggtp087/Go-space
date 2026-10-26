@@ -1,6 +1,8 @@
 import { mockDistrictBoundaries, mockSubDistrictBoundaries } from './mapBoundaries'
 import { mockOpsPoints } from './opsPoints'
 
+export { getOpsAnalysis, type OpsAnalysis } from './opsAnalysis'
+
 /** [west, south, east, north] in EPSG:4326 — matches what a real bbox query would expect. */
 export type Bbox = [number, number, number, number]
 

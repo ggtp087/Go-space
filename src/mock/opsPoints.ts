@@ -1,5 +1,5 @@
 import type { Feature, FeatureCollection, Point } from 'geojson'
-import { isPointInBangkokOutline, OUTLINE_CENTER } from './mapBoundaries'
+import { findSubDistrictId, isPointInBangkokOutline, OUTLINE_CENTER } from './mapBoundaries'
 
 // ~300 mock public open-space points scattered inside the Bangkok outline,
 // denser toward the center. Fully deterministic (fixed seed, no
@@ -7,15 +7,43 @@ import { isPointInBangkokOutline, OUTLINE_CENTER } from './mapBoundaries'
 
 export const OPS_TYPES = ['park', 'urban_forest', 'playground', 'plaza', 'sports_field'] as const
 export type OpsType = (typeof OPS_TYPES)[number]
-export type OpsPointProperties = { id: string; name: string; ops_type: OpsType }
+export type OpsPointProperties = {
+  id: string
+  name: string
+  ops_type: OpsType
+  area_sqm: number
+  agency: string
+  opened_year: number
+  subdistrict_id: string
+}
 
-const OPS_TYPE_LABELS: Record<OpsType, string> = {
+export const OPS_TYPE_LABELS: Record<OpsType, string> = {
   park: 'Park',
   urban_forest: 'Urban Forest',
   playground: 'Playground',
   plaza: 'Plaza',
   sports_field: 'Sports Field',
 }
+
+// Rough, plausible size range per type (m²) — just enough spread that the
+// popup's area figure doesn't look identical across points of the same type.
+const AREA_RANGE_SQM: Record<OpsType, [number, number]> = {
+  park: [5_000, 40_000],
+  urban_forest: [10_000, 80_000],
+  playground: [300, 2_000],
+  plaza: [500, 5_000],
+  sports_field: [2_000, 15_000],
+}
+
+const AGENCIES = [
+  'Bangkok Metropolitan Administration',
+  'District Public Works Office',
+  'Department of Environment',
+  'Community Management Office',
+] as const
+
+const OPENED_YEAR_MIN = 1985
+const OPENED_YEAR_MAX = 2024
 
 const TARGET_POINT_COUNT = 300
 // Sampling envelope — comfortably larger than the outline's own max radius in
@@ -52,9 +80,25 @@ function buildOpsPoints(): FeatureCollection<Point, OpsPointProperties> {
     const opsType = OPS_TYPES[Math.floor(uType * OPS_TYPES.length)]
     typeCounters[opsType] += 1
     const id = `geo-ops-${features.length + 1}`
+
+    // Distinct salts (candidate * 5 + ...) from the angle/radius/type draws
+    // above, so these don't correlate with where the point landed.
+    const [areaMin, areaMax] = AREA_RANGE_SQM[opsType]
+    const areaSqm = Math.round(areaMin + (areaMax - areaMin) * pseudoRandom01(candidate * 5 + 0.19))
+    const agency = AGENCIES[Math.floor(pseudoRandom01(candidate * 5 + 0.41) * AGENCIES.length)]
+    const openedYear = Math.round(OPENED_YEAR_MIN + (OPENED_YEAR_MAX - OPENED_YEAR_MIN) * pseudoRandom01(candidate * 5 + 0.67))
+
     features.push({
       type: 'Feature',
-      properties: { id, name: `${OPS_TYPE_LABELS[opsType]} ${typeCounters[opsType]}`, ops_type: opsType },
+      properties: {
+        id,
+        name: `${OPS_TYPE_LABELS[opsType]} ${typeCounters[opsType]}`,
+        ops_type: opsType,
+        area_sqm: areaSqm,
+        agency,
+        opened_year: openedYear,
+        subdistrict_id: findSubDistrictId([lon, lat]),
+      },
       geometry: { type: 'Point', coordinates: [lon, lat] },
     })
   }

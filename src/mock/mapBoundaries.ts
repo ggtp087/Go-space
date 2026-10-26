@@ -154,3 +154,36 @@ function buildBoundaries(): {
 
 const { districts: mockDistrictBoundaries, subDistricts: mockSubDistrictBoundaries } = buildBoundaries()
 export { mockDistrictBoundaries, mockSubDistrictBoundaries }
+
+export function getSubDistrictFeature(id: string): Feature<Polygon, SubDistrictProperties> | undefined {
+  return mockSubDistrictBoundaries.features.find((feature) => feature.properties.id === id)
+}
+
+export function getDistrictFeature(id: string): Feature<Polygon, DistrictProperties> | undefined {
+  return mockDistrictBoundaries.features.find((feature) => feature.properties.id === id)
+}
+
+/** Which sub-district a point falls in — used to tag mock OPS points at generation time. */
+export function findSubDistrictId(point: Position): string {
+  const containing = mockSubDistrictBoundaries.features.find((feature) =>
+    isPointInRing(point, feature.geometry.coordinates[0]),
+  )
+  if (containing) return containing.properties.id
+
+  // Rare fallback for a point that lands in a grid gap between surviving
+  // cells (sub-districts are filtered by cell-center containment, not exact
+  // coverage) — fall back to whichever sub-district's center is nearest.
+  let nearestId = mockSubDistrictBoundaries.features[0].properties.id
+  let nearestDistSq = Infinity
+  for (const feature of mockSubDistrictBoundaries.features) {
+    const ring = feature.geometry.coordinates[0]
+    const centerLon = (ring[0][0] + ring[2][0]) / 2
+    const centerLat = (ring[0][1] + ring[2][1]) / 2
+    const distSq = (centerLon - point[0]) ** 2 + (centerLat - point[1]) ** 2
+    if (distSq < nearestDistSq) {
+      nearestDistSq = distSq
+      nearestId = feature.properties.id
+    }
+  }
+  return nearestId
+}

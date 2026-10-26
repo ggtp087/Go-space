@@ -31,7 +31,35 @@ export const mapStyle = {
       plaza: '#4E5A52',
       sports_field: '#2563EB',
     } satisfies Record<OpsType, string>,
+    // Applied to whichever point is currently selected, on top of its own
+    // ops_type fill color.
+    selectedRadius: 9,
+    selectedColor: '#111111',
+    selectedWeight: 2.5,
   },
+  serviceArea: {
+    fillColor: '#2E7D5B',
+    fillOpacity: 0.25,
+    color: '#2E7D5B',
+    weight: 1.5,
+  },
+  network: {
+    // Reads clearly over both the golden GIS fills and the green service area.
+    color: '#E11D48',
+    weight: 3,
+  },
+}
+
+// "Zoom to service area" fitBounds padding (px per side) — keeps the
+// service area out from under the docked analysis card. left/right make
+// room for the card horizontally; top/bottom then shift the geometry
+// within what's left (e.g. a bigger bottom than top pushes it upward).
+// Tune these directly — nothing else needs to change.
+export const zoomPadding = {
+  // Desktop: card docks top-right, 280px wide.
+  wide: { left: 140, right: 304, top: 24, bottom: 120 },
+  // Narrow/mobile: card is a full-width bottom sheet, ~360px tall.
+  narrow: { left: 24, right: 24, top: 24, bottom: 384 },
 }
 
 /**
@@ -45,21 +73,48 @@ export function getSubDistrictStyle(filled: boolean): PathOptions {
 }
 
 /**
- * District boundary style. `filled` is true only when in GIS mode AND the
- * sub-district layer is off (so the district fill stands in for it);
- * otherwise this is an outline-only layer sitting above the sub-district fill.
+ * The district boundary line itself — always stroke-only. Sits above the
+ * service-area/network analysis layers, per the stated bottom-to-top order.
  */
-export function getDistrictStyle(filled: boolean): PathOptions {
-  if (!filled) return { color: mapStyle.district.color, weight: mapStyle.district.weight, fill: false }
-  return { color: mapStyle.district.color, weight: mapStyle.district.weight, fillColor: mapStyle.district.fillColor, fillOpacity: mapStyle.district.fillOpacity, fill: true }
+export function getDistrictOutlineStyle(): PathOptions {
+  return { color: mapStyle.district.color, weight: mapStyle.district.weight, fill: false }
 }
 
-export function getOpsPointStyle(opsType: OpsType): CircleMarkerOptions {
+/**
+ * Fill-only stand-in for the sub-district layer, used in GIS mode when
+ * "District boundaries" is on and "Sub-district boundaries" is off. Drawn as
+ * a separate layer from the outline above, in the same low pane as the
+ * sub-district fill — an opaque fill at the district-outline layer's higher
+ * pane would otherwise sit on top of and hide the service-area/network layers.
+ */
+export function getDistrictFillOnlyStyle(): PathOptions {
+  return { fillColor: mapStyle.district.fillColor, fillOpacity: mapStyle.district.fillOpacity, fill: true, stroke: false }
+}
+
+export function getOpsPointStyle(opsType: OpsType, selected = false): CircleMarkerOptions {
   return {
-    radius: mapStyle.opsPoint.radius,
-    color: mapStyle.opsPoint.color,
-    weight: mapStyle.opsPoint.weight,
+    radius: selected ? mapStyle.opsPoint.selectedRadius : mapStyle.opsPoint.radius,
+    color: selected ? mapStyle.opsPoint.selectedColor : mapStyle.opsPoint.color,
+    weight: selected ? mapStyle.opsPoint.selectedWeight : mapStyle.opsPoint.weight,
     fillOpacity: mapStyle.opsPoint.fillOpacity,
     fillColor: mapStyle.opsPoint.colorsByType[opsType],
   }
+}
+
+export function getOpsTypeColor(opsType: OpsType): string {
+  return mapStyle.opsPoint.colorsByType[opsType]
+}
+
+export function getServiceAreaStyle(): PathOptions {
+  return {
+    color: mapStyle.serviceArea.color,
+    weight: mapStyle.serviceArea.weight,
+    fillColor: mapStyle.serviceArea.fillColor,
+    fillOpacity: mapStyle.serviceArea.fillOpacity,
+    fill: true,
+  }
+}
+
+export function getNetworkStyle(): PathOptions {
+  return { color: mapStyle.network.color, weight: mapStyle.network.weight }
 }
