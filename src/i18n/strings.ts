@@ -41,10 +41,18 @@ export const en = {
     layersSectionTitle: 'Map layers',
     filtersSectionTitle: 'Filters',
     openSpaceTypeLabel: 'Open space type',
+    opsTypes: {
+      all: 'All types',
+      open_space: 'Open spaces',
+      public_park: 'Public parks',
+      park_15min: '15-minute parks',
+      sports_ground: 'Sports grounds',
+    },
     districtLabel: 'District',
     accessibilityRangeLabel: 'Accessibility range',
     adminLevelLabel: 'Admin level',
     areaDetailsTitle: 'Area details',
+    bangkokLabel: 'Bangkok',
     ofResidents: 'of residents',
     accessibilityDescription: 'Share of residents living within a 400 m walk of a public green or open space — the SDG 11.7.1 population indicator.',
     coveredLabel: 'Covered',
@@ -200,8 +208,29 @@ export const en = {
   },
 } as const
 
-export type Strings = typeof en
+// Widens every string literal (from `en`'s `as const`) to plain `string`,
+// recursively — the shape consumers (`t.xxx`) actually read at runtime.
+// Nothing relies on narrowing to `en`'s literal default text.
+type Widen<T> = T extends string ? string : T extends object ? { [K in keyof T]: Widen<T[K]> } : T
+
+export type Strings = Widen<typeof en>
+
+// Same widening, but every key optional — lets `th` below fill in
+// individual leaf strings (or whole sub-sections) without having to
+// provide every sibling key in that section too.
+type DeepPartial<T> = T extends string ? string : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T
 
 // Thai copy lands here once translation work starts; components should keep
 // reading through the language context rather than importing `en` directly.
-export const th: Partial<Strings> = {}
+export const th: DeepPartial<Strings> = {
+  map: {
+    bangkokLabel: 'กรุงเทพมหานคร',
+    opsTypes: {
+      all: 'ทุกประเภท',
+      open_space: 'พื้นที่โล่ง',
+      public_park: 'สวนสาธารณะ',
+      park_15min: 'สวน 15 นาที',
+      sports_ground: 'ลานกีฬา',
+    },
+  },
+}

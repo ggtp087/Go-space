@@ -25,7 +25,7 @@ export function Select({ label, options, id, className = '', ...rest }: SelectPr
         <select
           {...rest}
           id={selectId}
-          className="h-[38px] w-full appearance-none rounded-lg border border-line-2 bg-white pl-3 pr-8 text-[13px] text-ink outline-none focus:border-green-600"
+          className="h-[38px] w-full appearance-none rounded-lg border border-line-2 bg-white pl-3 pr-8 text-[13px] text-ink outline-none focus:border-green-600 disabled:cursor-not-allowed disabled:bg-bg disabled:text-mist"
         >
           {options.map((option) => (
             <option key={option.value} value={option.value}>

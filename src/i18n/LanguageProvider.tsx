@@ -12,7 +12,7 @@ function resolveStrings(language: Language): Strings {
     lang: { ...en.lang, ...th.lang },
     user: { ...en.user, ...th.user },
     pages: { ...en.pages, ...th.pages },
-    map: { ...en.map, ...th.map },
+    map: { ...en.map, ...th.map, opsTypes: { ...en.map.opsTypes, ...th.map?.opsTypes } },
     adminLevel: { ...en.adminLevel, ...th.adminLevel },
     filters: { ...en.filters, ...th.filters },
     common: { ...en.common, ...th.common },

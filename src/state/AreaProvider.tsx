@@ -2,10 +2,20 @@ import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { AreaContext, type AreaContextValue } from './AreaContext'
 import type { AreaLevel } from '../mock/areas'
 import { getSubDistrictParentId } from '../mock/subdistricts'
+import { getSubDistrictFeature } from '../mock/mapBoundaries'
+
+// Dashboard/Compare's sub-districts (district-a-1, ...) and the Map page's
+// geo sub-districts (geo-subdistrict-1, ...) are two different id
+// namespaces sharing this same context — try the Dashboard lookup first,
+// then the geo one, so whichever namespace a given id belongs to resolves.
+function resolveParentDistrictId(subDistrictId: string): string | undefined {
+  return getSubDistrictParentId(subDistrictId) ?? getSubDistrictFeature(subDistrictId)?.properties.district_id
+}
 
 export function AreaProvider({ children }: { children: ReactNode }) {
   const [level, setLevel] = useState<AreaLevel>('district')
-  const [districtId, setDistrictIdState] = useState('district-d')
+  // 'all' ("All districts" / whole Bangkok) is the shared default.
+  const [districtId, setDistrictIdState] = useState('all')
   const [subDistrictId, setSubDistrictIdState] = useState('all')
 
   // Picking a district clears any previously selected sub-district from a
@@ -20,7 +30,7 @@ export function AreaProvider({ children }: { children: ReactNode }) {
   const setSubDistrictId = useCallback((id: string) => {
     setSubDistrictIdState(id)
     if (id !== 'all') {
-      const parentId = getSubDistrictParentId(id)
+      const parentId = resolveParentDistrictId(id)
       if (parentId) setDistrictIdState(parentId)
     }
   }, [])
