@@ -1,4 +1,10 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { GeoJSON, MapContainer, Pane, ScaleControl, TileLayer } from 'react-leaflet'
+import { circleMarker } from 'leaflet'
+import type { LatLngBoundsExpression, LatLngTuple, Map as LeafletMap } from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+import { getDistrictStyle, getOpsPointStyle, getSubDistrictStyle } from '../config/mapStyle'
+import { getMapData, type Bbox } from '../mock/mapData'
 import { Chip } from '../components/ui/Chip'
 import { DonutChart } from '../components/ui/DonutChart'
 import { Legend } from '../components/ui/Legend'
@@ -31,6 +37,23 @@ const NEARBY_ICONS: Record<string, ReactNode> = {
   Playground: <PlaygroundIcon />,
 }
 
+// Starting view + hard pan/zoom limits for the map. The bounds are a
+// placeholder padded box around Bangkok; once district boundary data exists,
+// these should derive from that extent instead of being hand-picked.
+const BANGKOK_CENTER: LatLngTuple = [13.7563, 100.5018]
+const BANGKOK_ZOOM = 11
+const MAP_MIN_ZOOM = 10
+const MAP_MAX_ZOOM = 19
+const BANGKOK_MAX_BOUNDS: LatLngBoundsExpression = [
+  [13.4, 100.2],
+  [14.05, 101.05],
+]
+const MAX_BOUNDS_VISCOSITY = 0.8
+
+// Used only for the brief window before the first real moveend-derived bbox
+// arrives (the mock data ignores bbox entirely, so this is mostly cosmetic).
+const FALLBACK_BBOX: Bbox = [100.2, 13.4, 101.05, 14.05]
+
 export function MapPage() {
   const { t } = useLanguage()
   const { year, setYear, years } = useYear()
@@ -44,6 +67,56 @@ export function MapPage() {
   const [selectedType, setSelectedType] = useState(sampleOpenSpaceTypes[0])
   const [range, setRange] = useState<[number, number]>([22, 85])
   const [basemap, setBasemap] = useState(basemapOptions[0].value)
+  const activeBasemap = basemapOptions.find((option) => option.value === basemap) ?? basemapOptions[0]
+
+  const mapRef = useRef<LeafletMap | null>(null)
+  const mapWrapperRef = useRef<HTMLDivElement | null>(null)
+  // Captured on every moveend; currently just feeds getMapData (which ignores
+  // it), ready to drive a real bbox-filtered fetch once the backend exists.
+  const [bbox, setBbox] = useState<Bbox | null>(null)
+  const mapData = useMemo(() => getMapData(bbox ?? FALLBACK_BBOX), [bbox])
+
+  const isGisBasemap = basemap === 'gis'
+
+  // Resizes the map whenever its wrapper's box changes size — covers both
+  // the left/right SidePanel collapse transitions and plain window resizes,
+  // so the map never gets left mis-sized after a layout change.
+  useEffect(() => {
+    const map = mapRef.current
+    const wrapperEl = mapWrapperRef.current
+    if (!map || !wrapperEl) return
+    const resizeObserver = new ResizeObserver(() => map.invalidateSize())
+    resizeObserver.observe(wrapperEl)
+    return () => resizeObserver.disconnect()
+  }, [])
+
+  // Tracks the current viewport bbox for future GeoJSON overlay fetching.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    const handleMoveEnd = () => {
+      const bounds = map.getBounds()
+      setBbox([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()])
+    }
+    handleMoveEnd()
+    map.on('moveend', handleMoveEnd)
+    return () => {
+      map.off('moveend', handleMoveEnd)
+    }
+  }, [])
+
+  function handleZoomIn() {
+    mapRef.current?.zoomIn()
+  }
+
+  function handleZoomOut() {
+    mapRef.current?.zoomOut()
+  }
+
+  function handleResetView() {
+    mapRef.current?.setView(BANGKOK_CENTER, BANGKOK_ZOOM)
+  }
 
   const districtOptions = getDistrictOptions()
   const effectiveDistrictId = districtId === 'all' ? getFirstAreaId('district') : districtId
@@ -135,33 +208,110 @@ export function MapPage() {
       </SidePanel>
 
       <div className="relative flex-1 bg-card">
-        <div className="absolute inset-4 flex items-center justify-center rounded-xl border border-dashed border-line-2 text-sm text-slate">
-          {t.map.mapPlaceholder}
+        {/* isolate pins Leaflet's own pane/control z-indexes (200-1000) inside
+            this box, so they can never out-stack the overlay sibling below. */}
+        <div ref={mapWrapperRef} className="relative isolate z-0 h-full w-full">
+          <MapContainer
+            ref={mapRef}
+            center={BANGKOK_CENTER}
+            zoom={BANGKOK_ZOOM}
+            minZoom={MAP_MIN_ZOOM}
+            maxZoom={MAP_MAX_ZOOM}
+            maxBounds={BANGKOK_MAX_BOUNDS}
+            maxBoundsViscosity={MAX_BOUNDS_VISCOSITY}
+            zoomControl={false}
+            scrollWheelZoom
+            doubleClickZoom
+            touchZoom
+            preferCanvas
+            className={isGisBasemap ? 'h-full w-full bg-white' : 'h-full w-full'}
+          >
+            {/* key forces a clean remount on basemap change, so the tile URL and attribution always swap together. */}
+            {activeBasemap.tileUrl && (
+              <TileLayer key={activeBasemap.value} url={activeBasemap.tileUrl} attribution={activeBasemap.attribution} />
+            )}
+
+            {/* Each layer gets its own always-mounted Pane with a fixed
+                z-index, so bottom-to-top order (sub-district fill, district
+                outline, OPS points) holds no matter what sequence the
+                toggles are flipped in — only the Panes' children mount or
+                unmount, never the Panes themselves. */}
+            <Pane name="subdistrict-pane" style={{ zIndex: 401 }}>
+              {layerState['subdistrict-boundaries'] && (
+                <GeoJSON data={mapData.subDistricts} style={getSubDistrictStyle(isGisBasemap)} />
+              )}
+            </Pane>
+
+            <Pane name="district-pane" style={{ zIndex: 402 }}>
+              {layerState['district-boundaries'] && (
+                <GeoJSON
+                  data={mapData.districts}
+                  style={getDistrictStyle(isGisBasemap && !layerState['subdistrict-boundaries'])}
+                />
+              )}
+            </Pane>
+
+            <Pane name="ops-pane" style={{ zIndex: 403 }}>
+              {layerState['open-spaces'] && (
+                <GeoJSON
+                  data={mapData.opsPoints}
+                  pointToLayer={(feature, latlng) =>
+                    // A custom pointToLayer bypasses the GeoJSON layer's own pane option, so
+                    // the target pane has to be set explicitly here too, or these fall back
+                    // to the default overlayPane and render below the fills above them.
+                    circleMarker(latlng, { ...getOpsPointStyle(feature.properties.ops_type), pane: 'ops-pane' })
+                  }
+                />
+              )}
+            </Pane>
+
+            <ScaleControl position="bottomright" imperial={false} />
+          </MapContainer>
         </div>
 
-        <SegmentedControl
-          value={basemap}
-          onChange={setBasemap}
-          options={basemapOptions}
-          className="absolute left-5 top-5 z-[5] w-auto shadow-card"
-        />
+        {/* Sits above the map's stacking context; pointer-events-none here
+            (restored per-control below) so empty space still lets drags/
+            scroll-zoom reach the map underneath. */}
+        <div className="pointer-events-none absolute inset-0 z-10">
+          <SegmentedControl
+            value={basemap}
+            onChange={setBasemap}
+            options={basemapOptions}
+            className="pointer-events-auto absolute left-5 top-5 w-auto shadow-card"
+          />
 
-        <div className="absolute right-5 top-5 z-[5] flex flex-col gap-2">
-          <div className="flex flex-col overflow-hidden rounded-[9px] border border-line bg-white shadow-card">
-            <button type="button" aria-label="Zoom in" className="flex h-9 w-9 items-center justify-center border-b border-line text-ink">
-              <PlusIcon />
-            </button>
-            <button type="button" aria-label="Zoom out" className="flex h-9 w-9 items-center justify-center text-ink">
-              <MinusIcon />
+          <div className="pointer-events-auto absolute right-5 top-5 flex flex-col gap-2">
+            <div className="flex flex-col overflow-hidden rounded-[9px] border border-line bg-white shadow-card">
+              <button
+                type="button"
+                aria-label="Zoom in"
+                onClick={handleZoomIn}
+                className="flex h-9 w-9 items-center justify-center border-b border-line text-ink"
+              >
+                <PlusIcon />
+              </button>
+              <button
+                type="button"
+                aria-label="Zoom out"
+                onClick={handleZoomOut}
+                className="flex h-9 w-9 items-center justify-center text-ink"
+              >
+                <MinusIcon />
+              </button>
+            </div>
+            <button
+              type="button"
+              aria-label="Reset view"
+              onClick={handleResetView}
+              className="flex h-9 w-9 items-center justify-center rounded-[9px] border border-line bg-white text-ink shadow-card"
+            >
+              <FitIcon />
             </button>
           </div>
-          <button type="button" aria-label="Fit to view" className="flex h-9 w-9 items-center justify-center rounded-[9px] border border-line bg-white text-ink shadow-card">
-            <FitIcon />
-          </button>
-        </div>
 
-        <div className="absolute bottom-5 left-5 z-[5]">
-          <Legend title={t.map.legendTitle} note={t.map.legendNote} steps={accessibilityLegendSteps} />
+          <div className="pointer-events-auto absolute bottom-5 left-5">
+            <Legend title={t.map.legendTitle} note={t.map.legendNote} steps={accessibilityLegendSteps} />
+          </div>
         </div>
       </div>
 
