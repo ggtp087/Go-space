@@ -63,6 +63,52 @@ export const mapStyle = {
   },
 }
 
+// Categorical palette for "which area is this" series (Compare's chips,
+// bars, and later lines/outlines) — deliberately outside the green→orange
+// hues of accessibilityScale below, so a series color is never mistaken for
+// an accessibility class.
+export const comparisonPalette = ['#2563EB', '#7C3AED', '#DB2777', '#0891B2']
+
+// The one source for the 5-step accessibility color scale — the Dashboard's
+// choropleth/brackets/ranking, mock/areas.ts's accessibilityColor(), and the
+// Map's legend (mock/accessibilityLegend.ts) all read from this, so there's
+// a single place to retune the breaks when real data arrives.
+export type AccessibilityBand = { min: number; max: number; color: string; tick: string; label: string }
+
+export const accessibilityScale: AccessibilityBand[] = [
+  { min: 0, max: 29, color: '#D9822B', tick: '0%', label: '0–29%' },
+  { min: 30, max: 49, color: '#E4B064', tick: '30', label: '30–49%' },
+  { min: 50, max: 64, color: '#D8D3A0', tick: '50', label: '50–64%' },
+  { min: 65, max: 79, color: '#7FB88F', tick: '65', label: '65–79%' },
+  { min: 80, max: 100, color: '#2A7A54', tick: '80–100%', label: '80–100%' },
+]
+
+/**
+ * Classifies on the ROUNDED value (not the raw decimal), so a figure that
+ * displays as "65%" always gets the 65–79 band's color — never a neighboring
+ * band's, which is what raw-value classification could do right at a
+ * boundary (e.g. 64.6 displays as "65%" but is still < 65 unrounded).
+ */
+export function getAccessibilityBand(pct: number): AccessibilityBand {
+  const rounded = Math.round(pct)
+  return accessibilityScale.find((b) => rounded >= b.min && rounded <= b.max) ?? accessibilityScale[accessibilityScale.length - 1]
+}
+
+export function getAccessibilityColor(pct: number): string {
+  return getAccessibilityBand(pct).color
+}
+
+/**
+ * Choropleth fill for a district/sub-district polygon, colored by its own
+ * access_pct — reuses the sub-district/district stroke/weight tokens above
+ * (so it still reads as the same kind of boundary) with the fill swapped
+ * for the accessibility color instead of the GIS gold.
+ */
+export function getChoroplethStyle(fillColor: string, level: 'district' | 'sub-district'): PathOptions {
+  const base = level === 'district' ? mapStyle.district : mapStyle.subDistrict
+  return { color: base.color, weight: base.weight, fillColor, fillOpacity: 0.85, fill: true, interactive: false }
+}
+
 // "Zoom to service area" fitBounds padding (px per side) — keeps the
 // service area out from under the docked analysis card. left/right make
 // room for the card horizontally; top/bottom then shift the geometry

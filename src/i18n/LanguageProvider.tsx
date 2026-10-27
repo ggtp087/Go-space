@@ -20,6 +20,8 @@ function resolveStrings(language: Language): Strings {
       ...en.dashboard,
       ...th.dashboard,
       columns: { ...en.dashboard.columns, ...th.dashboard?.columns },
+      kpi: { ...en.dashboard.kpi, ...th.dashboard?.kpi },
+      trend: { ...en.dashboard.trend, ...th.dashboard?.trend },
     },
     compare: { ...en.compare, ...th.compare },
     auth: {

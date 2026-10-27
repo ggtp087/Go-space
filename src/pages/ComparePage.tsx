@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Chip } from '../components/ui/Chip'
@@ -6,14 +6,19 @@ import { DonutChart } from '../components/ui/DonutChart'
 import { ProgressBar } from '../components/ui/ProgressBar'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
-import { TrendLine } from '../components/ui/TrendLine'
 import { YearSelect } from '../components/ui/YearSelect'
+import { DeltaBadge } from '../components/dashboard/DeltaBadge'
+import { TrendChart } from '../components/dashboard/TrendChart'
+import { computeNiceAxis } from '../components/dashboard/trendAxis'
 import { useLanguage } from '../i18n/LanguageContext'
+import type { Strings } from '../i18n/strings'
 import { useYear } from '../state/YearContext'
 import { useArea } from '../state/AreaContext'
 import type { AreaLevel } from '../mock/areas'
 import { accessibilityColor, roundPct } from '../mock/areas'
+import { comparisonPalette } from '../config/mapStyle'
 import {
+  BANGKOK_AREA_ID,
   defaultComparisonAreas,
   getAllSubDistrictOptions,
   getAreaMeta,
@@ -37,8 +42,25 @@ type ComparisonItem = {
   row: AreaRow | undefined
 }
 
-const PALETTE = ['#1B4332', '#3F8F63', '#C2660F']
 const CHART_BAR_MAX_HEIGHT = 170
+const MAX_COMPARISON_AREAS = 4
+
+/** Bangkok's own display name isn't stored on ComparisonArea/AreaMeta in a language-reactive way — this resolves it fresh on every render instead. */
+function displayName(area: { id: string; name: string }, t: Strings): string {
+  return area.id === BANGKOK_AREA_ID ? t.map.bangkokLabel : area.name
+}
+
+/** Bangkok + every district + every sub-district (with its parent district named) — one flat, mixed-level pool to add from. */
+function getMixedAreaPool(bangkokLabel: string): { value: string; label: string }[] {
+  return [
+    { value: BANGKOK_AREA_ID, label: bangkokLabel },
+    ...getDistrictOptions(),
+    ...getAllSubDistrictOptions().map((option) => ({
+      value: option.value,
+      label: `${option.label} (${getAreaMeta(option.value)?.parentName ?? ''})`,
+    })),
+  ]
+}
 
 function getAreaOptionsForLevel(level: AreaLevel): { value: string; label: string }[] {
   if (level === 'district') return getDistrictOptions()
@@ -48,22 +70,45 @@ function getAreaOptionsForLevel(level: AreaLevel): { value: string; label: strin
   }))
 }
 
+/**
+ * The initial comparison set, seeded once from whatever's already selected
+ * on Map/Dashboard (useArea()) — not kept in lockstep afterward, so editing
+ * the comparison here doesn't reach back and change that shared selection.
+ */
+function buildInitialComparisonAreas(districtId: string, subDistrictId: string, bangkokLabel: string): ComparisonArea[] {
+  if (subDistrictId !== 'all') {
+    const subMeta = getAreaMeta(subDistrictId)
+    const districtMeta = subMeta?.parentId ? getAreaMeta(subMeta.parentId) : undefined
+    const areas: ComparisonArea[] = []
+    if (subMeta) areas.push({ id: subMeta.id, name: subMeta.name, level: 'sub-district', color: comparisonPalette[0] })
+    if (districtMeta) areas.push({ id: districtMeta.id, name: districtMeta.name, level: 'district', color: comparisonPalette[1] })
+    areas.push({ id: BANGKOK_AREA_ID, name: bangkokLabel, level: 'district', color: comparisonPalette[2] })
+    return areas
+  }
+  if (districtId !== 'all') {
+    const districtMeta = getAreaMeta(districtId)
+    const areas: ComparisonArea[] = []
+    if (districtMeta) areas.push({ id: districtMeta.id, name: districtMeta.name, level: 'district', color: comparisonPalette[0] })
+    areas.push({ id: BANGKOK_AREA_ID, name: bangkokLabel, level: 'district', color: comparisonPalette[1] })
+    return areas
+  }
+  return defaultComparisonAreas
+}
+
 export function ComparePage() {
   const { t } = useLanguage()
   const { year, setYear, years } = useYear()
   const { level, setLevel, districtId, setDistrictId, subDistrictId, setSubDistrictId } = useArea()
 
   const [mode, setMode] = useState<Mode>('districts')
-  const [comparisonAreas, setComparisonAreas] = useState<ComparisonArea[]>(defaultComparisonAreas)
+  const [comparisonAreas, setComparisonAreas] = useState<ComparisonArea[]>(() =>
+    buildInitialComparisonAreas(districtId, subDistrictId, t.map.bangkokLabel),
+  )
   // Explicit user pick for the "add area" select; null means "use the first available option".
   const [areaToAdd, setAreaToAdd] = useState<string | null>(null)
   const [selectedYears, setSelectedYears] = useState<Year[]>(() =>
     Array.from(new Set<Year>([2018, 2022, year])).sort((a, b) => a - b),
   )
-
-  // The comparison-chip level tracks the chips themselves; only falls back to
-  // the shared level when there are none yet, so clearing chips re-opens both options.
-  const comparisonLevel: AreaLevel = comparisonAreas[0]?.level ?? level
 
   const effectiveDistrictId = districtId === 'all' ? getFirstAreaId('district') : districtId
   const allSubDistrictOptions = getAllSubDistrictOptions()
@@ -71,29 +116,63 @@ export function ComparePage() {
     level === 'sub-district'
       ? subDistrictId !== 'all'
         ? subDistrictId
-        : allSubDistrictOptions[0]?.value ?? effectiveDistrictId
+        : (allSubDistrictOptions[0]?.value ?? effectiveDistrictId)
       : effectiveDistrictId
   const yearsAreaMeta = getAreaMeta(yearsAreaId)
 
-  const areaPool = getAreaOptionsForLevel(comparisonLevel)
+  const areaPool = useMemo(() => getMixedAreaPool(t.map.bangkokLabel), [t.map.bangkokLabel])
   const availableToAdd = areaPool.filter((option) => !comparisonAreas.some((a) => a.id === option.value))
   const resolvedAreaToAdd =
     (areaToAdd && availableToAdd.some((option) => option.value === areaToAdd) ? areaToAdd : null) ??
     availableToAdd[0]?.value ??
     ''
 
+  // The current Map/Dashboard selection — addable with one click if it
+  // isn't already in the comparison. Most-specific first, same rule the Map
+  // and Dashboard use for their own "focus area".
+  const currentSelectionId = subDistrictId !== 'all' ? subDistrictId : districtId !== 'all' ? districtId : undefined
+  const currentSelectionMeta = currentSelectionId ? getAreaMeta(currentSelectionId) : undefined
+  const currentSelectionAlreadyAdded = currentSelectionMeta
+    ? comparisonAreas.some((a) => a.id === currentSelectionMeta.id)
+    : true
+
+  function nextColor(): string {
+    const usedColors = comparisonAreas.map((a) => a.color)
+    return comparisonPalette.find((c) => !usedColors.includes(c)) ?? comparisonPalette[0]
+  }
+
   function addArea() {
-    if (comparisonAreas.length >= 3) return
+    if (comparisonAreas.length >= MAX_COMPARISON_AREAS) return
     const option = areaPool.find((o) => o.value === resolvedAreaToAdd)
     if (!option) return
-    const usedColors = comparisonAreas.map((a) => a.color)
-    const color = PALETTE.find((c) => !usedColors.includes(c)) ?? PALETTE[0]
-    setComparisonAreas((current) => [...current, { id: option.value, name: option.label, color, level: comparisonLevel }])
+    const meta = getAreaMeta(option.value)
+    const color = nextColor()
+    setComparisonAreas((current) => [...current, { id: option.value, name: option.label, color, level: meta?.level ?? 'district' }])
     setAreaToAdd(null)
+  }
+
+  function addCurrentSelection() {
+    if (!currentSelectionMeta || currentSelectionAlreadyAdded || comparisonAreas.length >= MAX_COMPARISON_AREAS) return
+    const color = nextColor()
+    setComparisonAreas((current) => [
+      ...current,
+      { id: currentSelectionMeta.id, name: currentSelectionMeta.name, level: currentSelectionMeta.level, color },
+    ])
   }
 
   function removeArea(id: string) {
     setComparisonAreas((current) => current.filter((a) => a.id !== id))
+  }
+
+  function setAsReference(id: string) {
+    setComparisonAreas((current) => {
+      const index = current.findIndex((a) => a.id === id)
+      if (index <= 0) return current
+      const next = [...current]
+      const [item] = next.splice(index, 1)
+      next.unshift(item)
+      return next
+    })
   }
 
   function toggleYear(y: Year) {
@@ -111,7 +190,7 @@ export function ComparePage() {
     mode === 'districts'
       ? comparisonAreas.map((a) => ({
           key: a.id,
-          title: a.name,
+          title: displayName(a, t),
           subtitle: String(year),
           color: a.color,
           row: getAreaRow(a.id, year),
@@ -120,9 +199,11 @@ export function ComparePage() {
           key: `${yearsAreaId}-${y}`,
           title: String(y),
           subtitle: yearsAreaMeta?.name ?? '',
-          color: PALETTE[index % PALETTE.length],
+          color: comparisonPalette[index % comparisonPalette.length],
           row: getAreaRow(yearsAreaId, y),
         }))
+
+  const referenceRow = mode === 'districts' ? comparisonItems[0]?.row : undefined
 
   const metricGroups: { key: MetricKey; label: string }[] = [
     { key: 'access_pct', label: t.compare.metricAccessibility },
@@ -133,6 +214,13 @@ export function ComparePage() {
     if (!row) return null
     return row[metric]
   }
+
+  const yearsAccessSeries = getMetricSeries(yearsAreaId, 'access_pct')
+  const yearsShareSeries = getMetricSeries(yearsAreaId, 'share_ops_pct')
+  const yearsShareAxis = useMemo(
+    () => computeNiceAxis(yearsShareSeries.map((point) => point.value).filter((value): value is number => value !== null)),
+    [yearsShareSeries],
+  )
 
   return (
     <div className="flex-1 overflow-auto p-10">
@@ -149,44 +237,48 @@ export function ComparePage() {
             { value: 'years', label: t.compare.modeYears },
           ]}
         />
-        <SegmentedControl
-          className="max-w-xs"
-          value={comparisonLevel}
-          onChange={(value) => setLevel(value as AreaLevel)}
-          options={[
-            {
-              value: 'district',
-              label: t.adminLevel.district,
-              disabled: mode === 'districts' && comparisonAreas.length > 0 && comparisonLevel !== 'district',
-              title: mode === 'districts' && comparisonAreas.length > 0 && comparisonLevel !== 'district' ? t.compare.levelLockedTooltip : undefined,
-            },
-            {
-              value: 'sub-district',
-              label: t.adminLevel.subDistrict,
-              disabled: mode === 'districts' && comparisonAreas.length > 0 && comparisonLevel !== 'sub-district',
-              title: mode === 'districts' && comparisonAreas.length > 0 && comparisonLevel !== 'sub-district' ? t.compare.levelLockedTooltip : undefined,
-            },
-          ]}
-        />
+        {mode === 'years' && (
+          <SegmentedControl
+            className="max-w-xs"
+            value={level}
+            onChange={(value) => setLevel(value as AreaLevel)}
+            options={[
+              { value: 'district', label: t.adminLevel.district },
+              { value: 'sub-district', label: t.adminLevel.subDistrict },
+            ]}
+          />
+        )}
       </div>
 
       {mode === 'districts' ? (
         <div className="mt-5 flex flex-wrap items-center gap-2">
-          {comparisonAreas.map((a) => (
-            <Chip key={a.id} label={a.name} removable swatchColor={a.color} onRemove={() => removeArea(a.id)} />
+          {comparisonAreas.map((a, index) => (
+            <Chip
+              key={a.id}
+              label={index === 0 ? `★ ${displayName(a, t)}` : displayName(a, t)}
+              removable
+              swatchColor={a.color}
+              onRemove={() => removeArea(a.id)}
+              action={index !== 0 ? { label: t.compare.setAsReference, onClick: () => setAsReference(a.id) } : undefined}
+            />
           ))}
-          {comparisonAreas.length < 3 && availableToAdd.length > 0 && (
+          {comparisonAreas.length < MAX_COMPARISON_AREAS && availableToAdd.length > 0 && (
             <div className="flex items-center gap-2">
               <Select
                 options={availableToAdd}
                 value={resolvedAreaToAdd}
                 onChange={(event) => setAreaToAdd(event.target.value)}
-                className="w-48"
+                className="w-56"
               />
               <Button variant="secondary" onClick={addArea}>
                 {t.compare.addArea}
               </Button>
             </div>
+          )}
+          {currentSelectionMeta && !currentSelectionAlreadyAdded && comparisonAreas.length < MAX_COMPARISON_AREAS && (
+            <Button variant="ghost" onClick={addCurrentSelection}>
+              {t.compare.addCurrentSelection.replace('{name}', displayName(currentSelectionMeta, t))}
+            </Button>
           )}
           <div className="ml-auto">
             <YearSelect years={years} value={year} onChange={setYear} />
@@ -196,7 +288,7 @@ export function ComparePage() {
         <div className="mt-5 flex flex-wrap items-end gap-4">
           <Select
             label={t.compare.areaLabel}
-            options={level === 'district' ? getDistrictOptions() : getAreaOptionsForLevel('sub-district')}
+            options={getAreaOptionsForLevel(level)}
             value={yearsAreaId}
             onChange={(event) => (level === 'district' ? setDistrictId(event.target.value) : setSubDistrictId(event.target.value))}
             className="w-56"
@@ -216,12 +308,14 @@ export function ComparePage() {
       <Card
         className="mt-8"
         title={t.compare.chartTitle}
+        note={t.common.sampleDataTag}
         actions={
           <div className="flex gap-4">
-            {comparisonItems.map((item) => (
+            {comparisonItems.map((item, index) => (
               <span key={item.key} className="flex items-center gap-1.5 text-xs font-semibold text-slate">
                 <span className="h-2.5 w-2.5 flex-none rounded-[3px]" style={{ background: item.color }} />
                 {item.title}
+                {mode === 'districts' && index === 0 && <span className="text-mist">({t.compare.referenceBadge})</span>}
               </span>
             ))}
           </div>
@@ -232,28 +326,39 @@ export function ComparePage() {
             const values = comparisonItems.map((item) => metricValue(item.row, group.key))
             const numericValues = values.filter((v): v is number => v !== null)
             const maxValue = Math.max(...numericValues, 1)
+            const referenceValue = mode === 'districts' ? values[0] : null
             return (
               <div key={group.key} className="flex flex-col items-center">
-                <div className="flex items-end gap-1.5" style={{ height: CHART_BAR_MAX_HEIGHT }}>
+                <div className="flex items-end gap-2" style={{ height: CHART_BAR_MAX_HEIGHT }}>
                   {comparisonItems.map((item, index) => {
                     const value = values[index]
-                    if (value === null) {
-                      return (
-                        <div key={item.key} className="flex w-[26px] flex-none flex-col items-center justify-end" style={{ height: CHART_BAR_MAX_HEIGHT }}>
-                          <span className="text-[10.5px] font-bold text-mist">—</span>
-                        </div>
-                      )
-                    }
-                    const heightPx = Math.max(4, (value / maxValue) * CHART_BAR_MAX_HEIGHT)
                     return (
                       <div
                         key={item.key}
-                        className="relative w-[26px] rounded-t-[5px]"
-                        style={{ height: heightPx, background: item.color }}
+                        className="flex min-w-[32px] flex-none flex-col items-center justify-end"
+                        style={{ height: CHART_BAR_MAX_HEIGHT }}
                       >
-                        <span className="absolute -top-[18px] left-0 right-0 text-center text-[10.5px] font-bold text-ink tabular-nums">
-                          {roundPct(value)}%
-                        </span>
+                        {value === null ? (
+                          <span className="text-[10.5px] font-bold text-mist">—</span>
+                        ) : (
+                          <div
+                            className="relative w-[26px] rounded-t-[5px]"
+                            style={{ height: Math.max(4, (value / maxValue) * CHART_BAR_MAX_HEIGHT), background: item.color }}
+                          >
+                            <span className="absolute -top-[18px] left-0 right-0 text-center text-[10.5px] font-bold text-ink tabular-nums">
+                              {roundPct(value)}%
+                            </span>
+                          </div>
+                        )}
+                        {mode === 'districts' && (
+                          <div className="mt-1.5 text-center text-[9.5px] leading-tight">
+                            {index === 0 ? (
+                              <span className="text-mist">{t.compare.referenceBadge}</span>
+                            ) : value !== null && referenceValue !== null ? (
+                              <DeltaBadge delta={value - referenceValue} noChangeLabel={t.dashboard.trend.noChange} compact />
+                            ) : null}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -268,23 +373,26 @@ export function ComparePage() {
       {mode === 'years' && (
         <Card className="mt-6" title={t.compare.lineChartTitle} note={t.common.sampleDataTag}>
           <div className="grid gap-6 sm:grid-cols-2">
-            {metricGroups.map((group) => (
-              <div key={group.key}>
-                <p className="mb-1.5 text-[12.5px] font-semibold text-ink">{group.label}</p>
-                <TrendLine
-                  points={getMetricSeries(yearsAreaId, group.key)}
-                  highlightYears={selectedYears}
-                  height={110}
-                  showAxisLabels
-                />
-              </div>
-            ))}
+            <div>
+              <p className="mb-1.5 text-[12.5px] font-semibold text-ink">{t.compare.metricAccessibility}</p>
+              <TrendChart points={yearsAccessSeries} selectedYears={selectedYears} yMax={100} yTicks={[0, 25, 50, 75, 100]} color="var(--color-green-600)" />
+            </div>
+            <div>
+              <p className="mb-1.5 text-[12.5px] font-semibold text-ink">{t.map.openSpaceShareLabel}</p>
+              <TrendChart
+                points={yearsShareSeries}
+                selectedYears={selectedYears}
+                yMax={yearsShareAxis.max}
+                yTicks={yearsShareAxis.ticks}
+                color="var(--color-accent-600)"
+              />
+            </div>
           </div>
         </Card>
       )}
 
       <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {comparisonItems.map((item) => (
+        {comparisonItems.map((item, index) => (
           <Card key={item.key} className="overflow-hidden">
             <div className="mb-1 flex items-center justify-center gap-2">
               <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ background: item.color }} />
@@ -314,6 +422,19 @@ export function ComparePage() {
                     color={accessibilityColor(item.row.access_pct)}
                   />
                 </div>
+                {mode === 'districts' && (
+                  <p className="mt-1 text-center text-[11px]">
+                    {index === 0 ? (
+                      <span className="text-mist">{t.compare.referenceBadge}</span>
+                    ) : referenceRow ? (
+                      <DeltaBadge
+                        delta={item.row.access_pct - referenceRow.access_pct}
+                        noChangeLabel={t.dashboard.trend.noChange}
+                        suffix={t.compare.vsReference}
+                      />
+                    ) : null}
+                  </p>
+                )}
 
                 <div className="mt-4 flex justify-around text-center text-[11px] text-slate">
                   <div>
@@ -340,6 +461,19 @@ export function ComparePage() {
                     value={item.row.share_ops_pct}
                     color={item.color}
                   />
+                  {mode === 'districts' && (
+                    <p className="mt-1 text-center text-[11px]">
+                      {index === 0 ? (
+                        <span className="text-mist">{t.compare.referenceBadge}</span>
+                      ) : referenceRow ? (
+                        <DeltaBadge
+                          delta={item.row.share_ops_pct - referenceRow.share_ops_pct}
+                          noChangeLabel={t.dashboard.trend.noChange}
+                          suffix={t.compare.vsReference}
+                        />
+                      ) : null}
+                    </p>
+                  )}
                 </div>
               </>
             )}

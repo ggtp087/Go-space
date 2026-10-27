@@ -8,9 +8,20 @@ export type DataTableColumn<T> = {
   render?: (row: T) => ReactNode
   /** Value to sort by; defaults to reading `row[key]`. */
   sortValue?: (row: T) => string | number
+  /** Hides this column below the given breakpoint — for columns that are nice-to-have but the first to go on a narrow screen. */
+  responsiveHide?: 'sm' | 'md' | 'lg' | 'xl'
 }
 
 type SortDirection = 'asc' | 'desc'
+
+// Written out in full (not built from a template literal) so Tailwind's
+// content scanner can actually find each class name in source.
+const RESPONSIVE_HIDE_CLASSES: Record<NonNullable<DataTableColumn<never>['responsiveHide']>, string> = {
+  sm: 'hidden sm:table-cell',
+  md: 'hidden md:table-cell',
+  lg: 'hidden lg:table-cell',
+  xl: 'hidden xl:table-cell',
+}
 
 type DataTableProps<T> = {
   columns: DataTableColumn<T>[]
@@ -64,7 +75,7 @@ export function DataTable<T extends Record<string, unknown>>({
                   key={column.key}
                   className={`border-b border-line px-3.5 py-2.5 text-[11px] font-bold uppercase tracking-[.4px] text-mist ${
                     column.align === 'right' ? 'text-right' : 'text-left'
-                  }`}
+                  } ${column.responsiveHide ? RESPONSIVE_HIDE_CLASSES[column.responsiveHide] : ''}`}
                 >
                   {column.sortable ? (
                     <button
@@ -92,7 +103,7 @@ export function DataTable<T extends Record<string, unknown>>({
                     key={column.key}
                     className={`border-b border-line px-3.5 py-[11px] text-[13px] text-ink ${
                       column.align === 'right' ? 'text-right' : 'text-left'
-                    }`}
+                    } ${column.responsiveHide ? RESPONSIVE_HIDE_CLASSES[column.responsiveHide] : ''}`}
                   >
                     {column.render ? column.render(row) : String(row[column.key])}
                   </td>

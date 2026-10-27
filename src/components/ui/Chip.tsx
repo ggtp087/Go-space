@@ -7,14 +7,25 @@ type ChipProps = {
   removable?: boolean
   swatchColor?: string
   onRemove?: () => void
+  /** Small secondary text action inside a removable chip (e.g. "Set as reference"). */
+  action?: { label: string; onClick: () => void }
 }
 
-export function Chip({ label, selected = false, onSelect, removable = false, swatchColor, onRemove }: ChipProps) {
+export function Chip({ label, selected = false, onSelect, removable = false, swatchColor, onRemove, action }: ChipProps) {
   if (removable) {
     return (
       <span className="inline-flex items-center gap-2 rounded-full border-[1.5px] border-line-2 bg-white py-[7px] pl-3.5 pr-[7px] text-[13px] font-semibold text-ink">
         {swatchColor && <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ background: swatchColor }} />}
         {label}
+        {action && (
+          <button
+            type="button"
+            onClick={action.onClick}
+            className="rounded-full border-none bg-transparent px-0.5 text-[11px] font-semibold text-green-700 hover:underline"
+          >
+            {action.label}
+          </button>
+        )}
         <button
           type="button"
           onClick={onRemove}

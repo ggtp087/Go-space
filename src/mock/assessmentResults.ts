@@ -2,6 +2,7 @@ import type { AreaLevel } from './areas'
 import { clamp, deterministicNoise } from './areas'
 import { mockDistrictBoundaries, mockSubDistrictBoundaries, ringAreaSqm } from './mapBoundaries'
 import { mockOpsPoints } from './opsPoints'
+import { comparisonPalette } from '../config/mapStyle'
 import { opsTypeValues, type OpsType } from '../config/opsTypes'
 import { availableYears, type Year } from './years'
 
@@ -253,6 +254,13 @@ export function areaHasAnyData(id: string): boolean {
   return getAreaMeta(id) !== undefined
 }
 
+/** All districts, or (for one district) just its own sub-districts — the one scoped list the Dashboard's choropleth, brackets, ranking, and table all share. */
+export function getChildAreaRows(districtId: string, year: Year): AreaRow[] {
+  if (districtId === 'all') return getAreaRowsForYear('district', year)
+  const subDistrictIds = subDistrictIdsByDistrict.get(districtId) ?? []
+  return subDistrictIds.map((id) => getAreaRow(id, year)).filter((row): row is AreaRow => row !== undefined)
+}
+
 export function getFirstAreaId(level: AreaLevel): string {
   return level === 'district' ? mockDistrictBoundaries.features[0].properties.id : allSubDistrictIds[0]
 }
@@ -278,12 +286,10 @@ export function getMetricSeries(id: string, metric: MetricKey): { year: Year; va
 
 // District A, D, J's old role — highest/median/lowest accessibility, picked
 // dynamically now that district ids are generated rather than hand-authored.
-const COMPARISON_PALETTE = ['#1B4332', '#3F8F63', '#C2660F']
-
 function buildDefaultComparisonAreas(): ComparisonArea[] {
   const districtRows = getAreaRowsForYear('district', ANCHOR_YEAR).sort((a, b) => b.access_pct - a.access_pct)
   const picks = [districtRows[0], districtRows[Math.floor(districtRows.length / 2)], districtRows[districtRows.length - 1]]
-  return picks.map((row, index) => ({ id: row.id, name: row.name, color: COMPARISON_PALETTE[index], level: 'district' as const }))
+  return picks.map((row, index) => ({ id: row.id, name: row.name, color: comparisonPalette[index], level: 'district' as const }))
 }
 
 export const defaultComparisonAreas: ComparisonArea[] = buildDefaultComparisonAreas()

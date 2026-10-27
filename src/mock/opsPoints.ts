@@ -1,6 +1,6 @@
 import type { Feature, FeatureCollection, Point } from 'geojson'
 import { opsTypeValues, type OpsType } from '../config/opsTypes'
-import { findSubDistrictId, isPointInBangkokOutline, OUTLINE_CENTER } from './mapBoundaries'
+import { findSubDistrictId, isPointInBangkokOutline, mockSubDistrictBoundaries, OUTLINE_CENTER } from './mapBoundaries'
 
 // ~300 mock public open-space points scattered inside the Bangkok outline,
 // denser toward the center. Fully deterministic (fixed seed, no
@@ -51,6 +51,14 @@ const TARGET_POINT_COUNT = 300
 const MAX_RADIUS_LON = 0.32
 const MAX_RADIUS_LAT = 0.25
 const MAX_CANDIDATES = 50_000
+// The denser-downtown radial distribution would otherwise let one central
+// sub-district absorb a wildly disproportionate share of the 300 points —
+// once a sub-district hits this cap, further candidates landing in it are
+// rejected (same as landing outside the outline) and sampling continues,
+// which naturally spills the "overflow" into the next ring out. ~3x the
+// flat per-sub-district average, so it still reads as denser toward the
+// center without one cell dominating.
+const MAX_POINTS_PER_SUBDISTRICT = Math.ceil((TARGET_POINT_COUNT / mockSubDistrictBoundaries.features.length) * 3)
 
 /** Cheap deterministic "random" in [0, 1) — same trick as mock/areas.ts's noise helper, just unsigned. */
 function pseudoRandom01(seed: number): number {
@@ -61,6 +69,7 @@ function pseudoRandom01(seed: number): number {
 function buildOpsPoints(): FeatureCollection<Point, OpsPointProperties> {
   const features: Feature<Point, OpsPointProperties>[] = []
   const typeCounters: Record<OpsType, number> = { open_space: 0, public_park: 0, park_15min: 0, sports_ground: 0 }
+  const countsBySubDistrict = new Map<string, number>()
 
   let candidate = 0
   while (features.length < TARGET_POINT_COUNT && candidate < MAX_CANDIDATES) {
@@ -77,6 +86,10 @@ function buildOpsPoints(): FeatureCollection<Point, OpsPointProperties> {
     const lat = OUTLINE_CENTER[1] + Math.sin(angle) * MAX_RADIUS_LAT * radiusFrac
     if (!isPointInBangkokOutline([lon, lat])) continue
 
+    const subdistrictId = findSubDistrictId([lon, lat])
+    const subDistrictCount = countsBySubDistrict.get(subdistrictId) ?? 0
+    if (subDistrictCount >= MAX_POINTS_PER_SUBDISTRICT) continue
+
     const opsType = opsTypeValues[Math.floor(uType * opsTypeValues.length)]
     typeCounters[opsType] += 1
     const id = `geo-ops-${features.length + 1}`
@@ -88,6 +101,7 @@ function buildOpsPoints(): FeatureCollection<Point, OpsPointProperties> {
     const agency = AGENCIES[Math.floor(pseudoRandom01(candidate * 5 + 0.41) * AGENCIES.length)]
     const openedYear = Math.round(OPENED_YEAR_MIN + (OPENED_YEAR_MAX - OPENED_YEAR_MIN) * pseudoRandom01(candidate * 5 + 0.67))
 
+    countsBySubDistrict.set(subdistrictId, subDistrictCount + 1)
     features.push({
       type: 'Feature',
       properties: {
@@ -97,7 +111,7 @@ function buildOpsPoints(): FeatureCollection<Point, OpsPointProperties> {
         area_sqm: areaSqm,
         agency,
         opened_year: openedYear,
-        subdistrict_id: findSubDistrictId([lon, lat]),
+        subdistrict_id: subdistrictId,
       },
       geometry: { type: 'Point', coordinates: [lon, lat] },
     })
