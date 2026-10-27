@@ -1,5 +1,6 @@
-import { clamp, deterministicNoise } from './areas'
-import { availableYears, type Year } from './years'
+import { BANGKOK_AREA_ID, getAssessmentResult, totalOpsCount } from './assessmentResults'
+import { roundPct } from './areas'
+import type { Year } from './years'
 
 export type KpiSample = {
   id: string
@@ -8,43 +9,18 @@ export type KpiSample = {
   tone: 'green' | 'amber'
 }
 
-// Citywide anchors for 2026 (kept from the original sample figures), with a
-// gradual citywide improvement back to 2017 — independent of the 10 sample
-// districts, which only cover a slice of the city.
-const ANCHOR_YEAR: Year = 2026
-const ANCHOR_ACCESSIBILITY_PCT = 54.2
-const ANCHOR_POPULATION = 5_494_932 // covered + not covered at the anchor year
-const ANCHOR_SPACES = 1247
-// Eq. 2.1: open public space area ÷ total land area of the admin boundary
-// (not built-up area).
-const ANCHOR_OPS_SHARE_PCT = 6.8
-
-function accessibilityPctForYear(year: Year): number {
-  const index = availableYears.indexOf(year)
-  const anchorIndex = availableYears.indexOf(ANCHOR_YEAR)
-  const start = ANCHOR_ACCESSIBILITY_PCT - 9
-  const t = index / anchorIndex
-  const noise = year === ANCHOR_YEAR ? 0 : deterministicNoise('citywide-accessibility', index, 0.6)
-  return Math.round(clamp(start + (ANCHOR_ACCESSIBILITY_PCT - start) * t + noise, 1, 99) * 10) / 10
-}
-
-function populationForYear(year: Year): number {
-  return Math.round(ANCHOR_POPULATION / Math.pow(1.006, ANCHOR_YEAR - year))
-}
-
+/** Citywide KPIs — rolled up from the one area dataset (Bangkok = sum of every sub-district), never a separate anchor. */
 export function getKpisForYear(year: Year): KpiSample[] {
-  const accessibilityPct = accessibilityPctForYear(year)
-  const population = populationForYear(year)
-  const covered = Math.round((population * accessibilityPct) / 100)
-  const notCovered = population - covered
-  const scale = accessibilityPct / ANCHOR_ACCESSIBILITY_PCT
-  const spaces = Math.max(0, Math.round(ANCHOR_SPACES * scale))
-  const opsSharePct = Math.round(ANCHOR_OPS_SHARE_PCT * scale * 10) / 10
+  const bangkok = getAssessmentResult(BANGKOK_AREA_ID, year)!
+  const totalPopulation = Math.round(bangkok.total_population)
+  const covered = Math.round(bangkok.population_with_access)
+  const notCovered = totalPopulation - covered
+  const spaces = totalOpsCount(bangkok.ops_count)
 
   return [
     {
       id: 'accessibility',
-      value: `${accessibilityPct}%`,
+      value: `${Math.round(bangkok.access_pct)}%`,
       label: 'Population accessibility — within 400 m of green & open space',
       tone: 'green',
     },
@@ -53,7 +29,7 @@ export function getKpisForYear(year: Year): KpiSample[] {
     { id: 'spaces', value: spaces.toLocaleString(), label: 'Public green & open spaces mapped citywide', tone: 'green' },
     {
       id: 'opsShare',
-      value: `${opsSharePct}%`,
+      value: `${roundPct(bangkok.share_ops_pct)}%`,
       label: 'Share of open public space (SDG 11.7.1)',
       tone: 'green',
     },

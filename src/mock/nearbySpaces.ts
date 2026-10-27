@@ -1,5 +1,4 @@
-import { districtSeeds } from './districts'
-import { getSubDistrictParentId } from './subdistricts'
+import { getSubDistrictFeature, mockDistrictBoundaries } from './mapBoundaries'
 
 export type NearbySpace = {
   id: string
@@ -24,22 +23,22 @@ function nextName(prefix: string): string {
 
 // Two generic public spaces per district, so both the Map's "Nearby public
 // spaces" list and the header search have something to show for every area.
-export const publicSpaces: NearbySpace[] = districtSeeds.flatMap((district, districtIndex) =>
+export const publicSpaces: NearbySpace[] = mockDistrictBoundaries.features.flatMap((district, districtIndex) =>
   [0, 1].map((i) => {
     const globalIndex = districtIndex * 2 + i
     const template = TEMPLATES[globalIndex % TEMPLATES.length]
     return {
-      id: `${district.id}-space-${i + 1}`,
+      id: `${district.properties.id}-space-${i + 1}`,
       name: nextName(template.namePrefix),
       type: template.type,
       distanceM: 150 + ((globalIndex * 137) % 700),
-      districtId: district.id,
+      districtId: district.properties.id,
     }
   }),
 )
 
 /** Nearby spaces for a district, or (falling back to its parent) a sub-district. */
 export function getNearbySpaces(areaId: string): NearbySpace[] {
-  const districtId = getSubDistrictParentId(areaId) ?? areaId
+  const districtId = getSubDistrictFeature(areaId)?.properties.district_id ?? areaId
   return publicSpaces.filter((space) => space.districtId === districtId)
 }

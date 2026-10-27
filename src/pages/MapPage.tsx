@@ -37,8 +37,8 @@ import { useYear } from '../state/YearContext'
 import { useArea } from '../state/AreaContext'
 import { accessibilityLegendSteps } from '../mock/accessibilityLegend'
 import { basemapOptions } from '../mock/basemaps'
-import { getAreaIndicators, getCoverage } from '../mock/areas'
-import { BANGKOK_AREA_ID, getMapAreaMeta, getMapAreaRow, getMapMetricSeries, mapAreaHasAnyData } from '../mock/mapAreaStats'
+import { roundPct } from '../mock/areas'
+import { BANGKOK_AREA_ID, areaHasAnyData, getAreaMeta, getAreaRow, getMetricSeries } from '../mock/assessmentResults'
 import { mapLayers } from '../mock/mapLayers'
 import { getNearbySpaces } from '../mock/nearbySpaces'
 
@@ -376,10 +376,10 @@ export function MapPage() {
   // "All districts" → Bangkok-wide; a sub-district if one's picked, else the
   // district if one's picked, else Bangkok again.
   const focusAreaId = isWholeCity ? BANGKOK_AREA_ID : subDistrictId !== 'all' ? subDistrictId : districtId
-  const focusMeta = getMapAreaMeta(focusAreaId)
-  const focusRow = getMapAreaRow(focusAreaId, year)
-  const focusHasAnyData = mapAreaHasAnyData(focusAreaId)
-  const trendSeries = getMapMetricSeries(focusAreaId, 'accessibilityPct')
+  const focusMeta = getAreaMeta(focusAreaId)
+  const focusRow = getAreaRow(focusAreaId, year)
+  const focusHasAnyData = areaHasAnyData(focusAreaId)
+  const trendSeries = getMetricSeries(focusAreaId, 'access_pct')
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -670,21 +670,25 @@ export function MapPage() {
         ) : (
           <>
             <div className="mt-[18px] flex items-center gap-[18px]">
-              <DonutChart percent={focusRow.accessibilityPct} centerLabel={`${focusRow.accessibilityPct}%`} subLabel={t.map.ofResidents} />
+              <DonutChart percent={focusRow.access_pct} centerLabel={`${Math.round(focusRow.access_pct)}%`} subLabel={t.map.ofResidents} />
               <p className="text-[12.5px] leading-[1.5] text-slate">{t.map.accessibilityDescription}</p>
             </div>
 
             <div className="mt-3.5 flex gap-2.5">
-              <StatBox value={getCoverage(focusRow).covered} label={t.map.coveredLabel} dotColor="var(--color-green-600)" />
-              <StatBox value={getCoverage(focusRow).notCovered} label={t.map.notCoveredLabel} dotColor="var(--color-accent-500)" />
+              <StatBox value={Math.round(focusRow.population_with_access)} label={t.map.coveredLabel} dotColor="var(--color-green-600)" />
+              <StatBox
+                value={Math.round(focusRow.total_population - focusRow.population_with_access)}
+                label={t.map.notCoveredLabel}
+                dotColor="var(--color-accent-500)"
+              />
             </div>
 
             <div className="mt-[18px]">
               <SectionTitle>{t.map.sdgSectionTitle}</SectionTitle>
               <ProgressBar
                 label={t.map.openSpaceShareLabel}
-                valueLabel={`${getAreaIndicators(focusRow).openSpaceSharePct}%`}
-                value={getAreaIndicators(focusRow).openSpaceSharePct}
+                valueLabel={`${roundPct(focusRow.share_ops_pct)}%`}
+                value={focusRow.share_ops_pct}
               />
             </div>
           </>

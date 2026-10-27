@@ -16,8 +16,14 @@ import { DataTable, type DataTableColumn } from '../components/ui/DataTable'
 import { YearSelect } from '../components/ui/YearSelect'
 import { useLanguage } from '../i18n/LanguageContext'
 import { getKpisForYear } from '../mock/kpis'
-import { accessibilityColor, defaultComparisonAreas, getDistrictOptions, type AreaRow } from '../mock/districts'
-import { getAreaRowsForYear } from '../mock/areaIndex'
+import { accessibilityColor, roundPct } from '../mock/areas'
+import {
+  defaultComparisonAreas,
+  getAreaRowsForYear,
+  getDistrictOptions,
+  totalOpsCount,
+  type AreaRow,
+} from '../mock/assessmentResults'
 import { accessibilityLegendSteps } from '../mock/accessibilityLegend'
 import { availableYears, defaultYear, type Year } from '../mock/years'
 import { opsTypeValues } from '../config/opsTypes'
@@ -63,9 +69,15 @@ const TABLE_COLUMNS: DataTableColumn<AreaRow>[] = [
     header: 'District',
     render: (row) => <span className="font-semibold">{row.name}</span>,
   },
-  { key: 'population', header: 'Population', sortable: true, align: 'right' },
   {
-    key: 'accessibilityPct',
+    key: 'total_population',
+    header: 'Population',
+    sortable: true,
+    align: 'right',
+    render: (row) => Math.round(row.total_population).toLocaleString(),
+  },
+  {
+    key: 'access_pct',
     header: 'Accessibility %',
     sortable: true,
     render: (row) => (
@@ -73,15 +85,22 @@ const TABLE_COLUMNS: DataTableColumn<AreaRow>[] = [
         <div className="h-1.5 w-16 rounded-full bg-bg">
           <div
             className="h-1.5 rounded-full"
-            style={{ width: `${row.accessibilityPct}%`, background: accessibilityColor(row.accessibilityPct) }}
+            style={{ width: `${row.access_pct}%`, background: accessibilityColor(row.access_pct) }}
           />
         </div>
-        <span className="tabular-nums">{row.accessibilityPct}%</span>
+        <span className="tabular-nums">{Math.round(row.access_pct)}%</span>
       </div>
     ),
   },
-  { key: 'openSpaces', header: 'Open spaces', sortable: true, align: 'right' },
-  { key: 'opsSharePct', header: 'OPS share %', sortable: true, align: 'right', render: (row) => `${row.opsSharePct}%` },
+  {
+    key: 'openSpaces',
+    header: 'Open spaces',
+    sortable: true,
+    align: 'right',
+    sortValue: (row) => totalOpsCount(row.ops_count),
+    render: (row) => totalOpsCount(row.ops_count),
+  },
+  { key: 'share_ops_pct', header: 'OPS share %', sortable: true, align: 'right', render: (row) => `${roundPct(row.share_ops_pct)}%` },
 ]
 
 export function ComponentsPreviewPage() {
@@ -99,7 +118,7 @@ export function ComponentsPreviewPage() {
   const [previewYear, setPreviewYear] = useState<Year>(defaultYear)
 
   const districtRows = getAreaRowsForYear('district', previewYear)
-  const featuredDistrict = districtRows.find((row) => row.id === 'district-d')!
+  const featuredDistrict = districtRows[0]!
 
   return (
     <div className="min-h-screen bg-bg p-8">
@@ -225,13 +244,13 @@ export function ComponentsPreviewPage() {
 
         <Section title="ProgressBar">
           <div className="max-w-md space-y-3">
-            <ProgressBar label="Open public space share" valueLabel={`${featuredDistrict.opsSharePct}%`} value={featuredDistrict.opsSharePct} />
-            <ProgressBar label="Accessibility" valueLabel={`${featuredDistrict.accessibilityPct}%`} value={featuredDistrict.accessibilityPct} color={accessibilityColor(featuredDistrict.accessibilityPct)} size="sm" />
+            <ProgressBar label="Open public space share" valueLabel={`${roundPct(featuredDistrict.share_ops_pct)}%`} value={featuredDistrict.share_ops_pct} />
+            <ProgressBar label="Accessibility" valueLabel={`${Math.round(featuredDistrict.access_pct)}%`} value={featuredDistrict.access_pct} color={accessibilityColor(featuredDistrict.access_pct)} size="sm" />
           </div>
         </Section>
 
         <Section title="DonutChart">
-          <DonutChart percent={featuredDistrict.accessibilityPct} centerLabel={`${featuredDistrict.accessibilityPct}%`} subLabel="of residents" />
+          <DonutChart percent={featuredDistrict.access_pct} centerLabel={`${Math.round(featuredDistrict.access_pct)}%`} subLabel="of residents" />
         </Section>
 
         <Section title="SegmentedControl">
@@ -282,7 +301,7 @@ export function ComponentsPreviewPage() {
             columns={TABLE_COLUMNS}
             rows={districtRows}
             getRowId={(row) => row.id}
-            defaultSortKey="accessibilityPct"
+            defaultSortKey="access_pct"
             footer={
               <>
                 <span>Showing {districtRows.length} of 50 districts</span>

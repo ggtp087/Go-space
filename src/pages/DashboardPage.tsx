@@ -8,11 +8,17 @@ import { YearSelect } from '../components/ui/YearSelect'
 import { useLanguage } from '../i18n/LanguageContext'
 import { useYear } from '../state/YearContext'
 import { useArea } from '../state/AreaContext'
-import type { AreaLevel, AreaRow } from '../mock/areas'
+import type { AreaLevel } from '../mock/areas'
+import { accessibilityColor, getAccessibilityBrackets, roundPct } from '../mock/areas'
 import { getKpisForYear } from '../mock/kpis'
-import { accessibilityColor, getAccessibilityBrackets, getDistrictOptions } from '../mock/districts'
-import { getAllSubDistrictOptions } from '../mock/subdistricts'
-import { getAreaMeta, getAreaRowsForYear } from '../mock/areaIndex'
+import {
+  getAllSubDistrictOptions,
+  getAreaMeta,
+  getAreaRowsForYear,
+  getDistrictOptions,
+  totalOpsCount,
+  type AreaRow,
+} from '../mock/assessmentResults'
 
 const KPI_ICONS: Record<string, ReactNode> = {
   accessibility: (
@@ -57,9 +63,9 @@ export function DashboardPage() {
   const areaFilterValue = isSubDistrict ? subDistrictId : districtId
   const filteredRows = areaFilterValue === 'all' ? allRows : allRows.filter((row) => row.id === areaFilterValue)
   const kpis = getKpisForYear(year)
-  const brackets = getAccessibilityBrackets(allRows)
+  const brackets = getAccessibilityBrackets(allRows.map((row) => row.access_pct))
 
-  const rankedRows = [...allRows].sort((a, b) => b.accessibilityPct - a.accessibilityPct)
+  const rankedRows = [...allRows].sort((a, b) => b.access_pct - a.access_pct)
   const highestRows = rankedRows.slice(0, 3)
   const lowestRows = rankedRows.slice(-3)
 
@@ -83,14 +89,14 @@ export function DashboardPage() {
         ] as DataTableColumn<AreaRow>[])
       : []),
     {
-      key: 'population',
+      key: 'total_population',
       header: t.dashboard.columns.population,
       sortable: true,
       align: 'right',
-      render: (row) => row.population.toLocaleString(),
+      render: (row) => Math.round(row.total_population).toLocaleString(),
     },
     {
-      key: 'accessibilityPct',
+      key: 'access_pct',
       header: t.dashboard.columns.accessibility,
       sortable: true,
       render: (row) => (
@@ -98,20 +104,27 @@ export function DashboardPage() {
           <div className="h-1.5 w-16 rounded-full bg-bg">
             <div
               className="h-1.5 rounded-full"
-              style={{ width: `${row.accessibilityPct}%`, background: accessibilityColor(row.accessibilityPct) }}
+              style={{ width: `${row.access_pct}%`, background: accessibilityColor(row.access_pct) }}
             />
           </div>
-          <span className="tabular-nums">{row.accessibilityPct}%</span>
+          <span className="tabular-nums">{Math.round(row.access_pct)}%</span>
         </div>
       ),
     },
-    { key: 'openSpaces', header: t.dashboard.columns.openSpaces, sortable: true, align: 'right' },
     {
-      key: 'opsSharePct',
+      key: 'openSpaces',
+      header: t.dashboard.columns.openSpaces,
+      sortable: true,
+      align: 'right',
+      sortValue: (row) => totalOpsCount(row.ops_count),
+      render: (row) => totalOpsCount(row.ops_count),
+    },
+    {
+      key: 'share_ops_pct',
       header: t.dashboard.columns.opsShare,
       sortable: true,
       align: 'right',
-      render: (row) => `${row.opsSharePct}%`,
+      render: (row) => `${roundPct(row.share_ops_pct)}%`,
     },
   ]
 
@@ -189,7 +202,7 @@ export function DashboardPage() {
           columns={columns}
           rows={filteredRows}
           getRowId={(row) => row.id}
-          defaultSortKey="accessibilityPct"
+          defaultSortKey="access_pct"
           footer={
             <>
               <span>
@@ -211,9 +224,9 @@ function RankingRow({ row }: { row: AreaRow }) {
     <div className="grid grid-cols-[100px_1fr_44px] items-center gap-2.5 py-[6px]">
       <span className="truncate text-[12.5px] font-semibold text-ink">{row.name}</span>
       <div className="h-4 rounded-[5px] bg-bg">
-        <div className="h-4 rounded-[5px]" style={{ width: `${row.accessibilityPct}%`, background: accessibilityColor(row.accessibilityPct) }} />
+        <div className="h-4 rounded-[5px]" style={{ width: `${row.access_pct}%`, background: accessibilityColor(row.access_pct) }} />
       </div>
-      <span className="text-right text-xs font-bold text-ink tabular-nums">{row.accessibilityPct}%</span>
+      <span className="text-right text-xs font-bold text-ink tabular-nums">{Math.round(row.access_pct)}%</span>
     </div>
   )
 }

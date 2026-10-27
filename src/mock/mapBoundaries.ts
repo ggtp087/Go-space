@@ -1,10 +1,9 @@
 import type { Feature, FeatureCollection, MultiPolygon, Polygon, Position } from 'geojson'
 
-// Generic mock map geometry for the GIS basemap — independent of the
-// district/sub-district dataset in mock/districts.ts and mock/subdistricts.ts
-// (those drive the Dashboard/Compare stats; these drive what's drawn on the
-// map). Both are placeholders the real backend will eventually replace, and
-// there's no requirement that their counts or boundaries line up.
+// Map geometry for the GIS basemap — the one district/sub-district id and
+// boundary source for the whole app (Map, Dashboard, and Compare all read
+// assessment figures keyed to these ids via mock/assessmentResults.ts). A
+// placeholder the real backend will eventually replace.
 //
 // Everything here is generated deterministically from fixed constants (no
 // Math.random), so the shapes are stable across reloads and between runs.
@@ -46,6 +45,29 @@ export function isPointInRing(point: Position, ring: Position[]): boolean {
 
 export function isPointInBangkokOutline(point: Position): boolean {
   return isPointInRing(point, bangkokOutlineRing)
+}
+
+// Equirectangular approximation for converting a ring's own lon/lat degrees
+// to meters — fine at the scale of a single sub-district, and consistent
+// with Bangkok's ~13.75°N latitude affecting how much a degree of longitude
+// is worth in meters (a degree of latitude is ~constant everywhere).
+const METERS_PER_DEGREE_LAT = 110_574
+function metersPerDegreeLon(latDeg: number): number {
+  return 111_320 * Math.cos((latDeg * Math.PI) / 180)
+}
+
+/** Shoelace-formula area of a closed ring, in m². */
+export function ringAreaSqm(ring: Position[]): number {
+  const refLat = ring.reduce((sum, [, lat]) => sum + lat, 0) / ring.length
+  const mLon = metersPerDegreeLon(refLat)
+  const points = ring.map(([lon, lat]): Position => [lon * mLon, lat * METERS_PER_DEGREE_LAT])
+  let sum = 0
+  for (let i = 0; i < points.length - 1; i++) {
+    const [x1, y1] = points[i]
+    const [x2, y2] = points[i + 1]
+    sum += x1 * y2 - x2 * y1
+  }
+  return Math.abs(sum) / 2
 }
 
 function rectangleRing(minLon: number, minLat: number, maxLon: number, maxLat: number): Position[] {

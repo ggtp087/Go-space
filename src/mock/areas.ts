@@ -1,36 +1,8 @@
-import { availableYears, type Year } from './years'
+// Generic, dataset-independent helpers shared by whichever area dataset is
+// in use (currently mock/assessmentResults.ts) — deterministic noise, the
+// accessibility color scale, and percentage display rounding.
 
 export type AreaLevel = 'district' | 'sub-district'
-
-export type AreaRow = {
-  id: string
-  level: AreaLevel
-  /** District id for a sub-district; null for a district itself. */
-  parentId: string | null
-  year: Year
-  name: string
-  population: number
-  accessibilityPct: number
-  openSpaces: number
-  opsSharePct: number
-}
-
-export type Trend = 'improving' | 'flat'
-
-/** The anchor (2026) values a year-series is generated from. */
-export type AreaSeed = {
-  id: string
-  level: AreaLevel
-  parentId: string | null
-  name: string
-  population: number
-  accessibilityPct: number
-  openSpaces: number
-  opsSharePct: number
-  trend: Trend
-}
-
-export type Gap = { id: string; years: Year[] }
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -49,55 +21,10 @@ export function deterministicNoise(seedId: string, salt: number, amplitude: numb
   return (frac * 2 - 1) * amplitude
 }
 
-const ANCHOR_YEAR: Year = 2026
-
-/**
- * Generates a full 2017–2026 series for one area from its 2026 anchor values.
- * "improving" areas ramp up gradually to the anchor; "flat" areas hover near
- * it with small noise. The anchor year itself is always exact (no noise), so
- * previously-shown 2026 figures never drift.
- */
-export function generateYearSeries(seed: AreaSeed): AreaRow[] {
-  const anchorIndex = availableYears.indexOf(ANCHOR_YEAR)
-
-  return availableYears.map((year, index) => {
-    const isAnchor = year === ANCHOR_YEAR
-    let accessibilityPct: number
-
-    if (seed.trend === 'improving') {
-      const improvement = clamp(seed.accessibilityPct * 0.35, 6, 24)
-      const startPct = Math.max(4, seed.accessibilityPct - improvement)
-      const t = index / anchorIndex
-      const noise = isAnchor ? 0 : deterministicNoise(seed.id, index, 1.2)
-      accessibilityPct = Math.round(clamp(startPct + (seed.accessibilityPct - startPct) * t + noise, 1, 99))
-    } else {
-      const noise = isAnchor ? 0 : deterministicNoise(seed.id, index, 1.5)
-      accessibilityPct = Math.round(clamp(seed.accessibilityPct + noise, 1, 99))
-    }
-
-    const scale = accessibilityPct / seed.accessibilityPct
-    const openSpaces = Math.max(0, Math.round(seed.openSpaces * scale))
-    const opsSharePct = Math.round(seed.opsSharePct * scale * 10) / 10
-    const population = Math.round(seed.population / Math.pow(1.007, ANCHOR_YEAR - year))
-
-    return {
-      id: seed.id,
-      level: seed.level,
-      parentId: seed.parentId,
-      year,
-      name: seed.name,
-      population,
-      accessibilityPct,
-      openSpaces,
-      opsSharePct,
-    }
-  })
-}
-
-/** Removes rows matching the given (id, year) gaps — used to test "no data" states. */
-export function applyGaps(rows: AreaRow[], gaps: Gap[]): AreaRow[] {
-  const gapKeys = new Set(gaps.flatMap((gap) => gap.years.map((year) => `${gap.id}__${year}`)))
-  return rows.filter((row) => !gapKeys.has(`${row.id}__${row.year}`))
+/** Rounds a raw decimal value for display only — never store a rounded value. */
+export function roundPct(value: number, decimals = 1): number {
+  const factor = 10 ** decimals
+  return Math.round(value * factor) / factor
 }
 
 /** Color for a given accessibility percentage, on the 5-step scale. */
@@ -107,22 +34,6 @@ export function accessibilityColor(pct: number): string {
   if (pct >= 50) return '#D8D3A0'
   if (pct >= 30) return '#E4B064'
   return '#D9822B'
-}
-
-/** Residents covered vs. not covered by a 400 m service area — always sums to population. */
-export function getCoverage(row: AreaRow): { covered: number; notCovered: number } {
-  const covered = Math.round((row.population * row.accessibilityPct) / 100)
-  return { covered, notCovered: row.population - covered }
-}
-
-/**
- * SDG 11.7.1 area-based indicator in scope for this project (Eq. 2.1): share
- * of open public space. (Eq. 2.2/2.3 — land allocated to streets, built-up
- * area open for public use — are out of scope: no street width/right-of-way
- * data.)
- */
-export function getAreaIndicators(row: AreaRow): { openSpaceSharePct: number } {
-  return { openSpaceSharePct: row.opsSharePct }
 }
 
 export type AccessibilityBracket = {
@@ -139,11 +50,11 @@ const ACCESSIBILITY_BANDS = [
   { min: 0, max: 29, color: '#D9822B', label: '0–29%' },
 ]
 
-/** How many of the given rows fall into each step of the 5-step accessibility scale. */
-export function getAccessibilityBrackets(rows: AreaRow[]): AccessibilityBracket[] {
+/** How many of the given accessibility percentages fall into each step of the 5-step scale. */
+export function getAccessibilityBrackets(values: number[]): AccessibilityBracket[] {
   return ACCESSIBILITY_BANDS.map((band) => ({
     color: band.color,
     label: band.label,
-    count: rows.filter((row) => row.accessibilityPct >= band.min && row.accessibilityPct <= band.max).length,
+    count: values.filter((value) => value >= band.min && value <= band.max).length,
   }))
 }

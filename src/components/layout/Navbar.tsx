@@ -4,8 +4,7 @@ import { BrandLockup } from '../brand/BrandLockup'
 import { LanguageToggle } from '../LanguageToggle'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { useArea } from '../../state/AreaContext'
-import { districtSeeds } from '../../mock/districts'
-import { subDistrictSeeds } from '../../mock/subdistricts'
+import { mockDistrictBoundaries, mockSubDistrictBoundaries } from '../../mock/mapBoundaries'
 import { publicSpaces } from '../../mock/nearbySpaces'
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -94,8 +93,8 @@ function SearchBox() {
     const matchesQuery = (name: string) => name.toLowerCase().includes(q)
     return {
       parks: publicSpaces.filter((space) => matchesQuery(space.name)).slice(0, 5),
-      districts: districtSeeds.filter((seed) => matchesQuery(seed.name)).slice(0, 5),
-      subDistricts: subDistrictSeeds.filter((seed) => matchesQuery(seed.name)).slice(0, 5),
+      districts: mockDistrictBoundaries.features.filter((feature) => matchesQuery(feature.properties.name)).slice(0, 5),
+      subDistricts: mockSubDistrictBoundaries.features.filter((feature) => matchesQuery(feature.properties.name)).slice(0, 5),
     }
   }, [query])
 
@@ -166,14 +165,14 @@ function SearchBox() {
 
           {results.districts.length > 0 && (
             <SearchGroup title={t.search.groupDistricts}>
-              {results.districts.map((seed) => (
+              {results.districts.map((feature) => (
                 <button
-                  key={seed.id}
+                  key={feature.properties.id}
                   type="button"
-                  onClick={() => goToDistrict(seed.id)}
+                  onClick={() => goToDistrict(feature.properties.id)}
                   className="flex w-full items-center px-3.5 py-2 text-left text-[13px] font-medium text-ink hover:bg-green-50"
                 >
-                  {seed.name}
+                  {feature.properties.name}
                 </button>
               ))}
             </SearchGroup>
@@ -181,16 +180,16 @@ function SearchBox() {
 
           {results.subDistricts.length > 0 && (
             <SearchGroup title={t.search.groupSubDistricts}>
-              {results.subDistricts.map((seed) => (
+              {results.subDistricts.map((feature) => (
                 <button
-                  key={seed.id}
+                  key={feature.properties.id}
                   type="button"
-                  onClick={() => goToSubDistrict(seed.id)}
+                  onClick={() => goToSubDistrict(feature.properties.id)}
                   className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] font-medium text-ink hover:bg-green-50"
                 >
-                  {seed.name}
+                  {feature.properties.name}
                   <span className="ml-auto text-[11px] font-normal text-mist">
-                    {districtSeeds.find((d) => d.id === seed.parentId)?.name}
+                    {mockDistrictBoundaries.features.find((d) => d.properties.id === feature.properties.district_id)?.properties.name}
                   </span>
                 </button>
               ))}

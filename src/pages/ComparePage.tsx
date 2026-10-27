@@ -11,10 +11,20 @@ import { YearSelect } from '../components/ui/YearSelect'
 import { useLanguage } from '../i18n/LanguageContext'
 import { useYear } from '../state/YearContext'
 import { useArea } from '../state/AreaContext'
-import type { AreaLevel, AreaRow } from '../mock/areas'
-import { accessibilityColor, getAreaIndicators, getCoverage, defaultComparisonAreas, getDistrictOptions, type ComparisonArea } from '../mock/districts'
-import { getAllSubDistrictOptions } from '../mock/subdistricts'
-import { getAreaMeta, getAreaRow, getFirstAreaId, getMetricSeries, type MetricKey } from '../mock/areaIndex'
+import type { AreaLevel } from '../mock/areas'
+import { accessibilityColor, roundPct } from '../mock/areas'
+import {
+  defaultComparisonAreas,
+  getAllSubDistrictOptions,
+  getAreaMeta,
+  getAreaRow,
+  getDistrictOptions,
+  getFirstAreaId,
+  getMetricSeries,
+  type AreaRow,
+  type ComparisonArea,
+  type MetricKey,
+} from '../mock/assessmentResults'
 import type { Year } from '../mock/years'
 
 type Mode = 'districts' | 'years'
@@ -115,14 +125,13 @@ export function ComparePage() {
         }))
 
   const metricGroups: { key: MetricKey; label: string }[] = [
-    { key: 'accessibilityPct', label: t.compare.metricAccessibility },
-    { key: 'openSpaceSharePct', label: t.map.openSpaceShareLabel },
+    { key: 'access_pct', label: t.compare.metricAccessibility },
+    { key: 'share_ops_pct', label: t.map.openSpaceShareLabel },
   ]
 
   function metricValue(row: AreaRow | undefined, metric: MetricKey): number | null {
     if (!row) return null
-    if (metric === 'accessibilityPct') return row.accessibilityPct
-    return getAreaIndicators(row)[metric]
+    return row[metric]
   }
 
   return (
@@ -243,7 +252,7 @@ export function ComparePage() {
                         style={{ height: heightPx, background: item.color }}
                       >
                         <span className="absolute -top-[18px] left-0 right-0 text-center text-[10.5px] font-bold text-ink tabular-nums">
-                          {value}%
+                          {roundPct(value)}%
                         </span>
                       </div>
                     )
@@ -299,24 +308,26 @@ export function ComparePage() {
                 <div className="flex justify-center">
                   <DonutChart
                     size={90}
-                    percent={item.row.accessibilityPct}
-                    centerLabel={`${item.row.accessibilityPct}%`}
+                    percent={item.row.access_pct}
+                    centerLabel={`${Math.round(item.row.access_pct)}%`}
                     subLabel={t.compare.ofResidentsAccessible}
-                    color={accessibilityColor(item.row.accessibilityPct)}
+                    color={accessibilityColor(item.row.access_pct)}
                   />
                 </div>
 
                 <div className="mt-4 flex justify-around text-center text-[11px] text-slate">
                   <div>
-                    <div className="text-[15px] font-bold text-ink tabular-nums">{item.row.population.toLocaleString()}</div>
+                    <div className="text-[15px] font-bold text-ink tabular-nums">{Math.round(item.row.total_population).toLocaleString()}</div>
                     {t.compare.populationLabel}
                   </div>
                   <div>
-                    <div className="text-[15px] font-bold text-ink tabular-nums">{getCoverage(item.row).covered.toLocaleString()}</div>
+                    <div className="text-[15px] font-bold text-ink tabular-nums">{Math.round(item.row.population_with_access).toLocaleString()}</div>
                     {t.map.coveredLabel}
                   </div>
                   <div>
-                    <div className="text-[15px] font-bold text-ink tabular-nums">{getCoverage(item.row).notCovered.toLocaleString()}</div>
+                    <div className="text-[15px] font-bold text-ink tabular-nums">
+                      {Math.round(item.row.total_population - item.row.population_with_access).toLocaleString()}
+                    </div>
                     {t.map.notCoveredLabel}
                   </div>
                 </div>
@@ -325,8 +336,8 @@ export function ComparePage() {
                   <ProgressBar
                     size="sm"
                     label={t.map.openSpaceShareLabel}
-                    valueLabel={`${getAreaIndicators(item.row).openSpaceSharePct}%`}
-                    value={getAreaIndicators(item.row).openSpaceSharePct}
+                    valueLabel={`${roundPct(item.row.share_ops_pct)}%`}
+                    value={item.row.share_ops_pct}
                     color={item.color}
                   />
                 </div>
