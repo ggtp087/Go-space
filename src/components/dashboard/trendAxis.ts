@@ -64,12 +64,42 @@ export function computeTrendYAxis(values: (number | null)[], tickCount = 5): { m
 /**
  * A 0-based "nice" axis for an arbitrary-magnitude count (e.g. population),
  * unlike computeTrendYAxis which is clamped to a 0–100 percentage.
+ *
+ * Uses niceNumber's `round: false` (ceiling) mode for the tick spacing, not
+ * `true` (nearest) — nearest can round DOWN (e.g. a fraction of 1.4 rounds
+ * to 1), which made `max` sometimes land below the padded data max, and
+ * occasionally even below the data itself, overflowing the tallest bar
+ * past the plot area.
  */
 export function computeCountAxis(values: number[], tickCount = 5): { max: number; ticks: number[] } {
   const dataMax = values.length ? Math.max(...values) : 0
   if (dataMax <= 0) return { max: 1, ticks: [0, 0.25, 0.5, 0.75, 1] }
-  const tickSpacing = niceNumber((dataMax * 1.15) / (tickCount - 1), true)
+  const tickSpacing = niceNumber((dataMax * 1.15) / (tickCount - 1), false)
   const max = tickSpacing * (tickCount - 1)
   const ticks = Array.from({ length: tickCount }, (_, i) => i * tickSpacing)
   return { max, ticks }
+}
+
+/**
+ * Which x-axis tick indices to label so a yearly axis with, say, 10 points
+ * doesn't run its labels into each other in a narrower card (e.g. a
+ * two-column grid at 768px). Always includes the first and last point so
+ * the data's range stays visible — the last regularly-spaced index is
+ * replaced by (not added alongside) the true last index when the two would
+ * otherwise land close enough to overlap.
+ */
+export function pickLabelIndices(pointCount: number, plotWidth: number, minSpacing = 34): number[] {
+  if (pointCount <= 0) return []
+  if (pointCount === 1) return [0]
+  const maxLabels = Math.max(1, Math.floor(plotWidth / minSpacing))
+  const step = Math.max(1, Math.ceil(pointCount / maxLabels))
+  const last = pointCount - 1
+  const indices: number[] = []
+  for (let i = 0; i < last; i += step) indices.push(i)
+  if (indices.length > 0 && last - indices[indices.length - 1] < step) {
+    indices[indices.length - 1] = last
+  } else {
+    indices.push(last)
+  }
+  return indices
 }

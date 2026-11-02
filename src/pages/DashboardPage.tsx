@@ -645,6 +645,7 @@ export function DashboardPage() {
                   selectedId={selectedId}
                   coveredLabel={t.dashboard.charts.coveredLabel}
                   notCoveredLabel={t.dashboard.charts.notCoveredLabel}
+                  populationLabel={t.dashboard.charts.scatterPopulationLabel}
                 />
               </Card>
             </div>
@@ -664,6 +665,8 @@ export function DashboardPage() {
               }}
               axisLabels={{ x: t.dashboard.charts.scatterAxisOpsShare, y: t.dashboard.charts.scatterAxisAccessibility }}
               populationLabel={t.dashboard.charts.scatterPopulationLabel}
+              medianLabelTemplate={t.dashboard.charts.scatterMedianLabel}
+              axisNote={t.dashboard.trend.axisNote}
             />
           </Card>
 

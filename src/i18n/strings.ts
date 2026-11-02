@@ -208,6 +208,7 @@ export const en = {
       scatterPopulationLabel: 'Population',
       scatterAxisAccessibility: 'Accessibility (%)',
       scatterAxisOpsShare: 'Open public space share (%)',
+      scatterMedianLabel: 'median {value}%',
     },
     controlBar: {
       limitLabel: 'Show',
@@ -547,6 +548,7 @@ export const th: DeepPartial<Strings> = {
       scatterPopulationLabel: 'ประชากร',
       scatterAxisAccessibility: 'การเข้าถึง (%)',
       scatterAxisOpsShare: 'สัดส่วนพื้นที่โล่งสาธารณะ (%)',
+      scatterMedianLabel: 'ค่ากลาง {value}%',
     },
     controlBar: {
       limitLabel: 'แสดง',
