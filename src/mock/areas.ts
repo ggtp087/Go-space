@@ -5,8 +5,14 @@
 // through the two shapes dataset/UI code here already expects.
 
 import { accessibilityScale, getAccessibilityBand, getAccessibilityColor } from '../config/mapStyle'
+import type { Language } from '../i18n/LanguageContext'
 
 export type AreaLevel = 'district' | 'sub-district'
+
+/** Picks a district/sub-district/Bangkok's name in the current UI language — the one place that choice happens, so every list/chart/table that already reads `.name` stays correct without touching its own code. */
+export function localizedName(nameEn: string, nameTh: string, language: Language): string {
+  return language === 'th' ? nameTh : nameEn
+}
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))

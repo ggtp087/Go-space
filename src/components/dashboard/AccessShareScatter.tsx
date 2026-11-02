@@ -1,3 +1,5 @@
+import { roundPct } from '../../mock/areas'
+
 type AccessShareScatterRow = { id: string; name: string; access_pct: number; share_ops_pct: number; total_population: number }
 
 type AccessShareScatterProps = {
@@ -111,7 +113,7 @@ export function AccessShareScatter({ rows, highlightIds, selectedId, quadrantLab
             strokeOpacity={isSelected ? 1 : isHighlighted ? 0.7 : 0.15}
           >
             <title>
-              {row.name}: {axisLabels.x} {Math.round(row.share_ops_pct)}%, {axisLabels.y} {Math.round(row.access_pct)}%, {populationLabel}{' '}
+              {row.name}: {axisLabels.x} {roundPct(row.share_ops_pct)}%, {axisLabels.y} {roundPct(row.access_pct)}%, {populationLabel}{' '}
               {Math.round(row.total_population).toLocaleString()}
             </title>
           </circle>

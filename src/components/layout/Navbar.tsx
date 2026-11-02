@@ -4,6 +4,7 @@ import { BrandLockup } from '../brand/BrandLockup'
 import { LanguageToggle } from '../LanguageToggle'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { useArea } from '../../state/AreaContext'
+import { localizedName } from '../../mock/areas'
 import { mockDistrictBoundaries, mockSubDistrictBoundaries } from '../../mock/mapBoundaries'
 import { publicSpaces } from '../../mock/nearbySpaces'
 
@@ -64,7 +65,7 @@ export function Navbar({ user }: NavbarProps) {
 }
 
 function SearchBox() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const navigate = useNavigate()
   const { setLevel, setDistrictId, setSubDistrictId } = useArea()
   const [query, setQuery] = useState('')
@@ -91,10 +92,18 @@ function SearchBox() {
     const q = query.trim().toLowerCase()
     if (!q) return null
     const matchesQuery = (name: string) => name.toLowerCase().includes(q)
+    // Matches either language's name regardless of which one the UI is
+    // currently showing, so switching languages never hides a result that
+    // used to match.
+    const matchesEitherName = (en: string, th: string) => matchesQuery(en) || matchesQuery(th)
     return {
       parks: publicSpaces.filter((space) => matchesQuery(space.name)).slice(0, 5),
-      districts: mockDistrictBoundaries.features.filter((feature) => matchesQuery(feature.properties.name)).slice(0, 5),
-      subDistricts: mockSubDistrictBoundaries.features.filter((feature) => matchesQuery(feature.properties.name)).slice(0, 5),
+      districts: mockDistrictBoundaries.features
+        .filter((feature) => matchesEitherName(feature.properties.name, feature.properties.name_th))
+        .slice(0, 5),
+      subDistricts: mockSubDistrictBoundaries.features
+        .filter((feature) => matchesEitherName(feature.properties.name, feature.properties.name_th))
+        .slice(0, 5),
     }
   }, [query])
 
@@ -157,7 +166,7 @@ function SearchBox() {
                   className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] text-ink hover:bg-green-50"
                 >
                   <span className="text-slate">{space.name}</span>
-                  <span className="ml-auto text-[11px] text-mist">{space.type}</span>
+                  <span className="ml-auto text-[11px] text-mist">{t.map.opsTypes[space.type]}</span>
                 </button>
               ))}
             </SearchGroup>
@@ -172,7 +181,7 @@ function SearchBox() {
                   onClick={() => goToDistrict(feature.properties.id)}
                   className="flex w-full items-center px-3.5 py-2 text-left text-[13px] font-medium text-ink hover:bg-green-50"
                 >
-                  {feature.properties.name}
+                  {localizedName(feature.properties.name, feature.properties.name_th, language)}
                 </button>
               ))}
             </SearchGroup>
@@ -187,9 +196,12 @@ function SearchBox() {
                   onClick={() => goToSubDistrict(feature.properties.id)}
                   className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] font-medium text-ink hover:bg-green-50"
                 >
-                  {feature.properties.name}
+                  {localizedName(feature.properties.name, feature.properties.name_th, language)}
                   <span className="ml-auto text-[11px] font-normal text-mist">
-                    {mockDistrictBoundaries.features.find((d) => d.properties.id === feature.properties.district_id)?.properties.name}
+                    {(() => {
+                      const parent = mockDistrictBoundaries.features.find((d) => d.properties.id === feature.properties.district_id)
+                      return parent && localizedName(parent.properties.name, parent.properties.name_th, language)
+                    })()}
                   </span>
                 </button>
               ))}
@@ -245,7 +257,7 @@ function UserMenu({ user }: { user: CurrentUser }) {
         </span>
         <span className="text-left leading-tight">
           <span className="block text-[13px] font-medium">{getDisplayName(user)}</span>
-          <span className="block text-[10.5px] text-[#A9C4B4]">{user.position}</span>
+          <span className="block text-[10.5px] text-[#A9C4B4]">{t.user.role}</span>
         </span>
         <svg
           width="14"

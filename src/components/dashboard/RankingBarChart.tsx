@@ -1,4 +1,4 @@
-import { accessibilityColor } from '../../mock/areas'
+import { accessibilityColor, roundPct } from '../../mock/areas'
 
 type RankingBarChartRow = { id: string; name: string; access_pct: number }
 
@@ -50,11 +50,11 @@ export function RankingBarChart({ rows, selectedId, rowHeight = 26 }: RankingBar
             </text>
             <rect x={MARGIN.left} y={barY} width={Math.max(1, xAt(row.access_pct) - MARGIN.left)} height={barH} fill={accessibilityColor(row.access_pct)} rx={3}>
               <title>
-                {row.name}: {Math.round(row.access_pct)}%
+                {row.name}: {roundPct(row.access_pct)}%
               </title>
             </rect>
             <text x={xAt(row.access_pct) + 6} y={y + rowHeight / 2 + 3.5} fontSize="11" fontWeight={700} fill="var(--color-ink)">
-              {Math.round(row.access_pct)}%
+              {roundPct(row.access_pct)}%
             </text>
           </g>
         )

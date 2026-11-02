@@ -88,7 +88,7 @@ function ProfileTab() {
           <div>
             <span className="mb-1.5 block text-[12.5px] font-semibold text-ink">{t.account.profileCard.positionLabel}</span>
             <span className="inline-flex items-center rounded-[9px] bg-green-100 px-3.5 py-[9px] text-[12.5px] font-bold text-green-800">
-              {currentUser.position}
+              {t.user.role}
             </span>
           </div>
         </div>

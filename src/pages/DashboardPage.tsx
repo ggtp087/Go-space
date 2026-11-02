@@ -14,6 +14,7 @@ import { RankingBarChart } from '../components/dashboard/RankingBarChart'
 import { Sparkline } from '../components/dashboard/Sparkline'
 import { TrendChart, type TrendChartPoint } from '../components/dashboard/TrendChart'
 import { computeTrendYAxis } from '../components/dashboard/trendAxis'
+import { formatYear } from '../i18n/formatYear'
 import type { Language } from '../i18n/LanguageContext'
 import { useLanguage } from '../i18n/LanguageContext'
 import type { Strings } from '../i18n/strings'
@@ -75,7 +76,7 @@ function buildKpis(row: AreaRow, areaName: string, isWholeCity: boolean, t: Stri
   const notCovered = totalPopulation - covered
 
   return [
-    { id: 'accessibility', value: `${Math.round(row.access_pct)}%`, label: `${t.dashboard.kpi.accessibility}, ${scope}`, tone: 'green' },
+    { id: 'accessibility', value: `${roundPct(row.access_pct)}%`, label: `${t.dashboard.kpi.accessibility}, ${scope}`, tone: 'green' },
     { id: 'covered', value: covered.toLocaleString(), label: `${t.dashboard.kpi.covered}, ${scope}`, tone: 'green' },
     { id: 'notCovered', value: notCovered.toLocaleString(), label: `${t.dashboard.kpi.notCovered}, ${scope}`, tone: 'amber' },
     { id: 'spaces', value: totalOpsCount(row.ops_count).toLocaleString(), label: `${t.dashboard.kpi.spaces}, ${scope}`, tone: 'green' },
@@ -203,22 +204,22 @@ export function DashboardPage() {
   // district if one's picked, else Bangkok again — same rule the Map page
   // uses for its own focus area, via the same roll-up function.
   const focusAreaId = isWholeCity ? BANGKOK_AREA_ID : subDistrictId !== 'all' ? subDistrictId : districtId
-  const focusMeta = getAreaMeta(focusAreaId)
-  const focusRow = getAreaRow(focusAreaId, year)
-  const districtMeta = !isWholeCity ? getAreaMeta(districtId) : undefined
+  const focusMeta = getAreaMeta(focusAreaId, language)
+  const focusRow = getAreaRow(focusAreaId, year, language)
+  const districtMeta = !isWholeCity ? getAreaMeta(districtId, language) : undefined
   const districtName = districtMeta?.name ?? ''
 
   // The one scoped list every other card below reads from: every district,
   // or (once a district is picked) just that district's own sub-districts —
   // never all ~48 sub-districts citywide.
-  const scopedRows = useMemo(() => getChildAreaRows(districtId, year), [districtId, year])
+  const scopedRows = useMemo(() => getChildAreaRows(districtId, year, language), [districtId, year, language])
   const previousYear = (year - 1) as Year
   const hasPreviousYear = (availableYears as readonly number[]).includes(previousYear)
-  const previousFocusRow = hasPreviousYear ? getAreaRow(focusAreaId, previousYear) : undefined
+  const previousFocusRow = hasPreviousYear ? getAreaRow(focusAreaId, previousYear, language) : undefined
   const previousScopedRowsById = useMemo(() => {
     if (!hasPreviousYear) return new Map<string, AreaRow>()
-    return new Map(getChildAreaRows(districtId, previousYear).map((row) => [row.id, row]))
-  }, [districtId, previousYear, hasPreviousYear])
+    return new Map(getChildAreaRows(districtId, previousYear, language).map((row) => [row.id, row]))
+  }, [districtId, previousYear, hasPreviousYear, language])
 
   const brackets = getAccessibilityBrackets(scopedRows.map((row) => row.access_pct))
 
@@ -227,15 +228,15 @@ export function DashboardPage() {
   const selectedId = !isWholeCity && subDistrictId !== 'all' ? subDistrictId : undefined
 
   const districtOptions = useMemo(
-    () => [{ value: 'all', label: t.dashboard.areaSelectAllLabel }, ...getDistrictOptions()],
-    [t.dashboard.areaSelectAllLabel],
+    () => [{ value: 'all', label: t.dashboard.areaSelectAllLabel }, ...getDistrictOptions(language)],
+    [t.dashboard.areaSelectAllLabel, language],
   )
   const subDistrictOptions = useMemo(
     () => [
       { value: 'all', label: t.filters.allSubDistricts },
-      ...getAllSubDistrictOptions().filter((option) => option.parentId === districtId),
+      ...getAllSubDistrictOptions(language).filter((option) => option.parentId === districtId),
     ],
-    [districtId, t.filters.allSubDistricts],
+    [districtId, t.filters.allSubDistricts, language],
   )
 
   const trendAccessSeries = getMetricSeries(focusAreaId, 'access_pct')
@@ -318,13 +319,22 @@ export function DashboardPage() {
     { value: 'asc', label: t.dashboard.controlBar.orderLowestFirst },
   ]
 
-  // Area names are English-only in this dataset (no Thai names exist for
-  // districts/sub-districts yet), so the search matches the one name there
-  // is, in either language mode.
+  // Matches an area's name in either language regardless of which one the
+  // UI is currently showing — e.g. searching "เขต 3" still finds "District 3"
+  // in English mode, and vice versa.
+  const otherLanguage: Language = language === 'th' ? 'en' : 'th'
+  const otherLanguageNameById = useMemo(() => {
+    const otherRows = getChildAreaRows(districtId, year, otherLanguage)
+    return new Map(otherRows.map((row) => [row.id, row.name]))
+  }, [districtId, year, otherLanguage])
   const searchedRows = useMemo(() => {
     const query = search.trim().toLowerCase()
-    return query ? scopedRows.filter((row) => row.name.toLowerCase().includes(query)) : scopedRows
-  }, [scopedRows, search])
+    if (!query) return scopedRows
+    return scopedRows.filter((row) => {
+      const otherName = otherLanguageNameById.get(row.id) ?? ''
+      return row.name.toLowerCase().includes(query) || otherName.toLowerCase().includes(query)
+    })
+  }, [scopedRows, search, otherLanguageNameById])
   const sortedRows = useMemo(() => sortRows(searchedRows, sortBy, order), [searchedRows, sortBy, order])
   const limitedRows = useMemo(() => (limit === 'all' ? sortedRows : sortedRows.slice(0, Number(limit))), [sortedRows, limit])
   const highlightIds = useMemo(() => new Set(limitedRows.map((row) => row.id)), [limitedRows])
@@ -361,7 +371,7 @@ export function DashboardPage() {
           <div className="h-1.5 w-16 rounded-full bg-bg">
             <div className="h-1.5 rounded-full" style={{ width: `${row.access_pct}%`, background: accessibilityColor(row.access_pct) }} />
           </div>
-          <span className="tabular-nums">{Math.round(row.access_pct)}%</span>
+          <span className="tabular-nums">{roundPct(row.access_pct)}%</span>
         </div>
       ),
     },
@@ -421,14 +431,14 @@ export function DashboardPage() {
             disabled={isWholeCity}
             className="w-44"
           />
-          <YearSelect years={years} value={year} onChange={setYear} formatOption={(y) => `${t.dashboard.analysisYear} ${y}`} />
+          <YearSelect years={years} value={year} onChange={setYear} formatOption={(y) => `${t.dashboard.analysisYear} ${formatYear(y, language)}`} />
         </div>
       </div>
 
       {!focusRow ? (
         <div className="rounded-lg border border-dashed border-line-2 p-4 text-center">
           <p className="text-[13px] font-semibold text-ink">{t.common.noDataTitle}</p>
-          <p className="mt-1 text-[12px] text-slate">{t.common.noDataBody.replace('{year}', String(year))}</p>
+          <p className="mt-1 text-[12px] text-slate">{t.common.noDataBody.replace('{year}', formatYear(year, language))}</p>
         </div>
       ) : (
         <>
@@ -452,10 +462,12 @@ export function DashboardPage() {
                 yTicks={accessAxis.ticks}
                 color="var(--color-green-600)"
                 axisNote={t.dashboard.trend.axisNote}
+                language={language}
+                noDataLabel={t.common.noData}
               />
               <p className="mb-1 mt-5 text-[12.5px] font-semibold text-ink">{t.dashboard.charts.accessibilityChangePerYearTitle}</p>
               <p className="mb-2 text-[11px] text-slate">{t.dashboard.charts.accessibilityChangePerYearSubtitle}</p>
-              <DeltaBarChart points={trendAccessSeries} />
+              <DeltaBarChart points={trendAccessSeries} language={language} />
             </Card>
             <Card title={t.dashboard.charts.opsShareTrendTitle} subtitle={t.dashboard.charts.opsShareTrendSubtitle} note={t.common.sampleDataTag}>
               <TrendSummaryHeader heading={t.map.openSpaceShareLabel} points={trendShareSeries} selectedYear={year} t={t} language={language} />
@@ -467,10 +479,12 @@ export function DashboardPage() {
                 yTicks={shareAxis.ticks}
                 color="var(--color-accent-600)"
                 axisNote={t.dashboard.trend.axisNote}
+                language={language}
+                noDataLabel={t.common.noData}
               />
               <p className="mb-1 mt-5 text-[12.5px] font-semibold text-ink">{t.dashboard.charts.opsShareChangePerYearTitle}</p>
               <p className="mb-2 text-[11px] text-slate">{t.dashboard.charts.opsShareChangePerYearSubtitle}</p>
-              <DeltaBarChart points={trendShareSeries} />
+              <DeltaBarChart points={trendShareSeries} language={language} />
             </Card>
           </div>
 

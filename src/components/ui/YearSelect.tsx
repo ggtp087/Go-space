@@ -1,3 +1,5 @@
+import { useLanguage } from '../../i18n/LanguageContext'
+
 type YearSelectProps<T extends number> = {
   years: readonly T[]
   value: T
@@ -13,15 +15,16 @@ export function YearSelect<T extends number>({
   value,
   onChange,
   formatOption = String,
-  ariaLabel = 'Year',
+  ariaLabel,
   className = '',
 }: YearSelectProps<T>) {
+  const { t } = useLanguage()
   return (
     <div className={`relative inline-flex ${className}`}>
       <select
         value={value}
         onChange={(event) => onChange(Number(event.target.value) as T)}
-        aria-label={ariaLabel}
+        aria-label={ariaLabel ?? t.common.year}
         className="h-9 appearance-none rounded-full border border-line bg-white pl-3.5 pr-8 text-[12.5px] font-semibold text-slate outline-none focus:border-green-600"
       >
         {years.map((year) => (

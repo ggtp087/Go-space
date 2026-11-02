@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useLanguage } from '../../i18n/LanguageContext'
 
 type SidePanelProps = {
   title: string
@@ -12,6 +13,7 @@ type SidePanelProps = {
 
 /** The collapsible filter/detail panel flanking the map. */
 export function SidePanel({ title, side = 'left', collapsed, onToggleCollapse, width = 296, footer, children }: SidePanelProps) {
+  const { t } = useLanguage()
   const pointsLeft = side === 'left' ? !collapsed : collapsed
 
   return (
@@ -26,7 +28,7 @@ export function SidePanel({ title, side = 'left', collapsed, onToggleCollapse, w
         <button
           type="button"
           onClick={onToggleCollapse}
-          aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
+          aria-label={collapsed ? t.common.expandPanel : t.common.collapsePanel}
           className="ml-auto flex h-[26px] w-[26px] flex-none items-center justify-center rounded-md border border-line bg-white text-slate"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">

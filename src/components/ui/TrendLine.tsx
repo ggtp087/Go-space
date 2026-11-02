@@ -1,3 +1,6 @@
+import { formatYear } from '../../i18n/formatYear'
+import type { Language } from '../../i18n/LanguageContext'
+
 export type TrendPoint = {
   year: number
   value: number | null
@@ -13,6 +16,8 @@ type TrendLineProps = {
   showAxisLabels?: boolean
   noDataLabel?: string
   className?: string
+  /** Converts every displayed year (tooltips, axis labels) to Buddhist Era in Thai mode — defaults to English/CE. */
+  language?: Language
 }
 
 const VIEW_WIDTH = 300
@@ -27,6 +32,7 @@ export function TrendLine({
   showAxisLabels = false,
   noDataLabel = 'No data',
   className = '',
+  language = 'en',
 }: TrendLineProps) {
   const padTop = showAxisLabels ? 16 : 6
   const padBottom = showAxisLabels ? 16 : 6
@@ -89,20 +95,20 @@ export function TrendLine({
               c.y === null ? (
                 <circle key={c.year} cx={c.x} cy={height - padBottom} r={2} fill="var(--color-mist-2)">
                   <title>
-                    {noDataLabel} ({c.year})
+                    {noDataLabel} ({formatYear(c.year, language)})
                   </title>
                 </circle>
               ) : highlightYears.includes(c.year) ? (
                 <circle key={c.year} cx={c.x} cy={c.y} r={3.5} fill="#fff" stroke={color} strokeWidth={2}>
                   <title>
-                    {c.year}: {c.value}
+                    {formatYear(c.year, language)}: {c.value}
                     {unit}
                   </title>
                 </circle>
               ) : (
                 <circle key={c.year} cx={c.x} cy={c.y} r={2} fill={color} opacity={0.5}>
                   <title>
-                    {c.year}: {c.value}
+                    {formatYear(c.year, language)}: {c.value}
                     {unit}
                   </title>
                 </circle>
@@ -113,8 +119,8 @@ export function TrendLine({
       </svg>
       {showAxisLabels && (
         <div className="mt-1 flex justify-between text-[10px] font-semibold text-mist">
-          <span>{points[0]?.year}</span>
-          <span>{points[points.length - 1]?.year}</span>
+          <span>{points[0] && formatYear(points[0].year, language)}</span>
+          <span>{points[points.length - 1] && formatYear(points[points.length - 1].year, language)}</span>
         </div>
       )}
     </div>

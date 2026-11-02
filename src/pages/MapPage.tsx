@@ -32,21 +32,17 @@ import { Toggle } from '../components/ui/Toggle'
 import { TrendLine } from '../components/ui/TrendLine'
 import { YearSelect } from '../components/ui/YearSelect'
 import { Button } from '../components/ui/Button'
+import { formatYear } from '../i18n/formatYear'
 import { useLanguage } from '../i18n/LanguageContext'
+import type { Language } from '../i18n/LanguageContext'
+import type { Strings } from '../i18n/strings'
 import { useYear } from '../state/YearContext'
 import { useArea } from '../state/AreaContext'
 import { basemapOptions } from '../mock/basemaps'
-import { roundPct } from '../mock/areas'
+import { localizedName, roundPct } from '../mock/areas'
 import { BANGKOK_AREA_ID, areaHasAnyData, getAreaMeta, getAreaRow, getMetricSeries } from '../mock/assessmentResults'
 import { mapLayers } from '../mock/mapLayers'
 import { getNearbySpaces } from '../mock/nearbySpaces'
-
-const NEARBY_ICONS: Record<string, ReactNode> = {
-  'Urban park': <TreeIcon />,
-  'Urban forest': <TreeIcon />,
-  'Public plaza': <PlazaIcon />,
-  Playground: <PlaygroundIcon />,
-}
 
 // Starting view + hard pan/zoom limits for the map. The bounds are a
 // placeholder padded box around Bangkok; once district boundary data exists,
@@ -106,7 +102,7 @@ type SavedView = { center: LatLng; zoom: number }
 type OpsSelection = { opsId: string; mode: 'preview' | 'zoomed'; savedView: SavedView | null }
 
 export function MapPage() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const { year, setYear, years } = useYear()
   const { districtId, setDistrictId, subDistrictId, setSubDistrictId } = useArea()
 
@@ -118,6 +114,12 @@ export function MapPage() {
   const [selectedType, setSelectedType] = useState<OpsTypeFilter>('all')
   const [basemap, setBasemap] = useState(basemapOptions[0].value)
   const activeBasemap = basemapOptions.find((option) => option.value === basemap) ?? basemapOptions[0]
+  const basemapLabelsByValue: Record<string, string> = {
+    gis: t.map.basemapLabels.gis,
+    osm: t.map.basemapLabels.osm,
+    satellite: t.map.basemapLabels.satellite,
+  }
+  const basemapSegmentOptions = basemapOptions.map((option) => ({ value: option.value, label: basemapLabelsByValue[option.value] ?? option.label }))
 
   const mapRef = useRef<LeafletMap | null>(null)
   const mapWrapperRef = useRef<HTMLDivElement | null>(null)
@@ -142,18 +144,24 @@ export function MapPage() {
   const districtOptions = useMemo(
     () => [
       { value: 'all', label: t.dashboard.areaSelectAllLabel },
-      ...mapData.districts.features.map((feature) => ({ value: feature.properties.id, label: feature.properties.name })),
+      ...mapData.districts.features.map((feature) => ({
+        value: feature.properties.id,
+        label: localizedName(feature.properties.name, feature.properties.name_th, language),
+      })),
     ],
-    [mapData.districts, t.dashboard.areaSelectAllLabel],
+    [mapData.districts, t.dashboard.areaSelectAllLabel, language],
   )
   const subDistrictOptions = useMemo(
     () => [
       { value: 'all', label: t.filters.allSubDistricts },
       ...mapData.subDistricts.features
         .filter((feature) => feature.properties.district_id === districtId)
-        .map((feature) => ({ value: feature.properties.id, label: feature.properties.name })),
+        .map((feature) => ({
+          value: feature.properties.id,
+          label: localizedName(feature.properties.name, feature.properties.name_th, language),
+        })),
     ],
-    [mapData.subDistricts, districtId, t.filters.allSubDistricts],
+    [mapData.subDistricts, districtId, t.filters.allSubDistricts, language],
   )
 
   // Identifies the current filter combination — used to force the ops/
@@ -374,10 +382,21 @@ export function MapPage() {
   // "All districts" → Bangkok-wide; a sub-district if one's picked, else the
   // district if one's picked, else Bangkok again.
   const focusAreaId = isWholeCity ? BANGKOK_AREA_ID : subDistrictId !== 'all' ? subDistrictId : districtId
-  const focusMeta = getAreaMeta(focusAreaId)
-  const focusRow = getAreaRow(focusAreaId, year)
+  const focusMeta = getAreaMeta(focusAreaId, language)
+  const focusRow = getAreaRow(focusAreaId, year, language)
   const focusHasAnyData = areaHasAnyData(focusAreaId)
   const trendSeries = getMetricSeries(focusAreaId, 'access_pct')
+
+  // mapLayers.ts only carries a stable id per layer — the shown label always
+  // comes from strings.ts, so it switches with the language.
+  const layerLabels: Record<string, string> = {
+    'open-spaces': t.map.layers.openSpaces,
+    'service-areas': t.map.layers.serviceAreas,
+    'district-boundaries': t.map.layers.districtBoundaries,
+    'subdistrict-boundaries': t.map.layers.subdistrictBoundaries,
+    'street-network': t.map.layers.streetNetwork,
+    population: t.map.layers.population,
+  }
 
   const districtLayer = mapLayers.find((layer) => layer.id === 'district-boundaries')
   const subDistrictLayer = mapLayers.find((layer) => layer.id === 'subdistrict-boundaries')
@@ -389,16 +408,16 @@ export function MapPage() {
   // a swatch for nothing.
   const legendRows: { id: string; label: string; swatch: ReactNode }[] = []
   if (layerState['open-spaces'] && visibleOpsPoints.features.length > 0 && openSpacesLayer) {
-    legendRows.push({ id: 'open-spaces', label: openSpacesLayer.label, swatch: <OpsTypeSwatch /> })
+    legendRows.push({ id: 'open-spaces', label: layerLabels[openSpacesLayer.id], swatch: <OpsTypeSwatch /> })
   }
   const zoomedServiceAreaVisible = isZoomedIn && selectedOpsAnalysis && analysisVisibility.serviceArea
   if ((allServiceAreas || zoomedServiceAreaVisible) && serviceAreasLayer) {
-    legendRows.push({ id: 'service-areas', label: serviceAreasLayer.label, swatch: <StyleSwatch style={getAllServiceAreasStyle()} /> })
+    legendRows.push({ id: 'service-areas', label: layerLabels[serviceAreasLayer.id], swatch: <StyleSwatch style={getAllServiceAreasStyle()} /> })
   }
   if (layerState['district-boundaries'] && districtLayer) {
     legendRows.push({
       id: 'district-boundaries',
-      label: districtLayer.label,
+      label: layerLabels[districtLayer.id],
       swatch: (
         <StyleSwatch
           style={{
@@ -415,7 +434,7 @@ export function MapPage() {
   if (layerState['subdistrict-boundaries'] && subDistrictLayer) {
     legendRows.push({
       id: 'subdistrict-boundaries',
-      label: subDistrictLayer.label,
+      label: layerLabels[subDistrictLayer.id],
       swatch: <StyleSwatch style={getSubDistrictStyle(isGisBasemap)} />,
     })
   }
@@ -434,12 +453,12 @@ export function MapPage() {
               <div key={layer.id} className="flex items-center justify-between py-[7px]">
                 <span className="flex items-center gap-2.5 text-[13.5px] text-ink">
                   <LayerSwatch layerId={layer.id} isGisBasemap={isGisBasemap} />
-                  {layer.label}
+                  {layerLabels[layer.id]}
                 </span>
                 <Toggle
                   checked={layerState[layer.id]}
                   onChange={(checked) => setLayerState((current) => ({ ...current, [layer.id]: checked }))}
-                  label={layer.label}
+                  label={layerLabels[layer.id]}
                 />
               </div>
             ))}
@@ -484,7 +503,7 @@ export function MapPage() {
 
           <div>
             <FieldLabel>{t.filters.year}</FieldLabel>
-            <YearSelect years={years} value={year} onChange={setYear} />
+            <YearSelect years={years} value={year} onChange={setYear} formatOption={(y) => formatYear(y, language)} />
           </div>
         </div>
       </SidePanel>
@@ -618,12 +637,12 @@ export function MapPage() {
           {/* Basemap switcher and zoom controls share this top-left stack so
               the top-right corner stays free for the docked analysis card. */}
           <div className="pointer-events-auto absolute left-5 top-5 flex flex-col items-start gap-2">
-            <SegmentedControl value={basemap} onChange={setBasemap} options={basemapOptions} className="w-auto shadow-card" />
+            <SegmentedControl value={basemap} onChange={setBasemap} options={basemapSegmentOptions} className="w-auto shadow-card" />
 
             <div className="flex flex-col overflow-hidden rounded-[9px] border border-line bg-white shadow-card">
               <button
                 type="button"
-                aria-label="Zoom in"
+                aria-label={t.common.zoomIn}
                 onClick={handleZoomIn}
                 className="flex h-9 w-9 items-center justify-center border-b border-line text-ink"
               >
@@ -631,7 +650,7 @@ export function MapPage() {
               </button>
               <button
                 type="button"
-                aria-label="Zoom out"
+                aria-label={t.common.zoomOut}
                 onClick={handleZoomOut}
                 className="flex h-9 w-9 items-center justify-center text-ink"
               >
@@ -640,7 +659,7 @@ export function MapPage() {
             </div>
             <button
               type="button"
-              aria-label="Reset view"
+              aria-label={t.common.resetView}
               onClick={handleResetView}
               className="flex h-9 w-9 items-center justify-center rounded-[9px] border border-line bg-white text-ink shadow-card"
             >
@@ -666,10 +685,14 @@ export function MapPage() {
                 point={selectedOpsFeature}
                 analysis={selectedOpsAnalysis}
                 typeLabel={t.map.opsTypes[selectedOpsFeature.properties.ops_type]}
-                subDistrictName={selectedSubDistrict?.properties.name}
-                districtName={selectedDistrict?.properties.name}
+                subDistrictName={
+                  selectedSubDistrict && localizedName(selectedSubDistrict.properties.name, selectedSubDistrict.properties.name_th, language)
+                }
+                districtName={selectedDistrict && localizedName(selectedDistrict.properties.name, selectedDistrict.properties.name_th, language)}
                 mode={isZoomedIn ? 'zoomed' : 'preview'}
                 visibility={analysisVisibility}
+                t={t}
+                language={language}
                 onToggleVisibility={(key) => setAnalysisVisibility((current) => ({ ...current, [key]: !current[key] }))}
                 onZoomToServiceArea={handleZoomToServiceArea}
                 onClose={closeOrExitZoom}
@@ -702,20 +725,18 @@ export function MapPage() {
         <h2 className="text-xl font-bold text-ink">{isWholeCity ? t.map.bangkokLabel : focusMeta?.name}</h2>
         <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-bold text-green-800">
           <GridIcon />
-          {isWholeCity
-            ? t.map.bangkokLabel
-            : `${subDistrictId !== 'all' ? t.adminLevel.subDistrict : t.adminLevel.district} level`}
+          {isWholeCity ? t.adminLevel.bangkokLevel : subDistrictId !== 'all' ? t.adminLevel.subDistrictLevel : t.adminLevel.districtLevel}
         </span>
 
         {!focusRow ? (
           <div className="mt-[18px] rounded-lg border border-dashed border-line-2 p-4 text-center">
             <p className="text-[13px] font-semibold text-ink">{t.common.noDataTitle}</p>
-            <p className="mt-1 text-[12px] text-slate">{t.common.noDataBody.replace('{year}', String(year))}</p>
+            <p className="mt-1 text-[12px] text-slate">{t.common.noDataBody.replace('{year}', formatYear(year, language))}</p>
           </div>
         ) : (
           <>
             <div className="mt-[18px] flex items-center gap-[18px]">
-              <DonutChart percent={focusRow.access_pct} centerLabel={`${Math.round(focusRow.access_pct)}%`} subLabel={t.map.ofResidents} />
+              <DonutChart percent={focusRow.access_pct} centerLabel={`${roundPct(focusRow.access_pct)}%`} subLabel={t.map.ofResidents} />
               <p className="text-[12.5px] leading-[1.5] text-slate">{t.map.accessibilityDescription}</p>
             </div>
 
@@ -742,26 +763,32 @@ export function MapPage() {
         {focusHasAnyData && (
           <div className="mt-[18px]">
             <SectionTitle>{t.map.trendSectionTitle}</SectionTitle>
-            <TrendLine points={trendSeries} highlightYears={[year]} />
+            <TrendLine points={trendSeries} highlightYears={[year]} language={language} noDataLabel={t.common.noData} />
           </div>
         )}
 
         <div className="mt-[18px]">
           <SectionTitle>{t.map.nearbySectionTitle}</SectionTitle>
-          {getNearbySpaces(focusAreaId).map((space) => (
+          {subDistrictId === 'all' ? (
+            <p className="rounded-lg border border-dashed border-line-2 p-3 text-center text-[12px] text-slate">{t.map.nearbySpacesHint}</p>
+          ) : (
+            getNearbySpaces(focusAreaId).map((space) => (
             <div key={space.id} className="flex items-center gap-2.5 border-t border-line py-[9px] first:border-t-0">
-              <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-green-100 text-green-700">
-                {NEARBY_ICONS[space.type]}
-              </span>
+              <span
+                className="h-3 w-3 flex-none rounded-full"
+                style={{ background: getOpsTypeColor(space.type) }}
+                aria-hidden="true"
+              />
               <div>
                 <div className="text-[13px] font-semibold text-ink">{space.name}</div>
-                <div className="text-[11px] text-slate">{space.type}</div>
+                <div className="text-[11px] text-slate">{t.map.opsTypes[space.type]}</div>
               </div>
               <span className="ml-auto rounded-full bg-green-50 px-2 py-[3px] text-[11.5px] font-semibold text-green-700">
                 {space.distanceM} m
               </span>
             </div>
-          ))}
+            ))
+          )}
         </div>
       </SidePanel>
     </div>
@@ -845,6 +872,8 @@ function OpsPopupCard({
   onToggleVisibility,
   onZoomToServiceArea,
   onClose,
+  t,
+  language,
 }: {
   point: Feature<Point, OpsPointProperties>
   analysis: OpsAnalysis
@@ -856,6 +885,8 @@ function OpsPopupCard({
   onToggleVisibility: (key: keyof AnalysisVisibility) => void
   onZoomToServiceArea: () => void
   onClose: () => void
+  t: Strings
+  language: Language
 }) {
   const { properties } = point
   const isZoomed = mode === 'zoomed'
@@ -865,7 +896,7 @@ function OpsPopupCard({
         <h3 className="text-[14px] font-bold leading-tight text-ink">{properties.name}</h3>
         <button
           type="button"
-          aria-label="Close"
+          aria-label={t.common.close}
           onClick={onClose}
           className="-mr-1 -mt-1 flex h-6 w-6 flex-none items-center justify-center rounded-full text-mist hover:bg-black/5 hover:text-ink"
         >
@@ -890,35 +921,43 @@ function OpsPopupCard({
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-line pt-2.5">
-        <PopupStat label="Area" value={formatSqm(properties.area_sqm)} />
-        <PopupStat label="Opened" value={String(properties.opened_year)} />
-        <PopupStat label="Agency" value={properties.agency} className="col-span-2" />
+        <PopupStat label={t.map.opsCard.areaLabel} value={formatSqm(properties.area_sqm)} />
+        <PopupStat label={t.map.opsCard.openedLabel} value={formatYear(properties.opened_year, language)} />
+        <PopupStat label={t.map.opsCard.agencyLabel} value={properties.agency} className="col-span-2" />
       </div>
 
       <div className="mt-3 border-t border-line pt-1">
         <div className="flex items-center justify-between py-1.5">
           <div>
-            <div className="text-[12px] font-semibold text-ink">Network</div>
-            <div className="text-[11px] text-slate">{formatKm(analysis.networkLengthM)} within 400 m</div>
-          </div>
-          {isZoomed && <Toggle checked={visibility.network} onChange={() => onToggleVisibility('network')} label="Network" />}
-        </div>
-        <div className="flex items-center justify-between py-1.5">
-          <div>
-            <div className="text-[12px] font-semibold text-ink">Service area</div>
+            <div className="text-[12px] font-semibold text-ink">{t.map.opsCard.networkLabel}</div>
             <div className="text-[11px] text-slate">
-              {formatSqKm(analysis.serviceAreaSqm)} · {analysis.populationCovered.toLocaleString()} covered
+              {formatKm(analysis.networkLengthM)} {t.map.opsCard.withinLabel}
             </div>
           </div>
           {isZoomed && (
-            <Toggle checked={visibility.serviceArea} onChange={() => onToggleVisibility('serviceArea')} label="Service area" />
+            <Toggle checked={visibility.network} onChange={() => onToggleVisibility('network')} label={t.map.opsCard.networkLabel} />
+          )}
+        </div>
+        <div className="flex items-center justify-between py-1.5">
+          <div>
+            <div className="text-[12px] font-semibold text-ink">{t.map.opsCard.serviceAreaLabel}</div>
+            <div className="text-[11px] text-slate">
+              {formatSqKm(analysis.serviceAreaSqm)} · {analysis.populationCovered.toLocaleString()} {t.map.opsCard.coveredSuffix}
+            </div>
+          </div>
+          {isZoomed && (
+            <Toggle
+              checked={visibility.serviceArea}
+              onChange={() => onToggleVisibility('serviceArea')}
+              label={t.map.opsCard.serviceAreaLabel}
+            />
           )}
         </div>
       </div>
 
       {!isZoomed && (
         <Button variant="secondary" fullWidth className="mt-2.5 h-9 text-[12.5px]" onClick={onZoomToServiceArea}>
-          Zoom to service area
+          {t.map.opsCard.zoomToServiceArea}
         </Button>
       )}
     </div>
@@ -1009,37 +1048,6 @@ function MapLegendCard({ title, rows }: { title: string; rows: { id: string; lab
         ))}
       </div>
     </div>
-  )
-}
-
-function TreeIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="9" r="6" />
-      <line x1="12" y1="15" x2="12" y2="21" />
-    </svg>
-  )
-}
-
-function PlazaIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
-      <rect x="4" y="4" width="16" height="16" rx="1" />
-      <circle cx="8" cy="8" r="1" fill="currentColor" stroke="none" />
-      <circle cx="16" cy="8" r="1" fill="currentColor" stroke="none" />
-      <circle cx="8" cy="16" r="1" fill="currentColor" stroke="none" />
-      <circle cx="16" cy="16" r="1" fill="currentColor" stroke="none" />
-    </svg>
-  )
-}
-
-function PlaygroundIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 4v16M20 4v16M4 4h16" />
-      <line x1="12" y1="4" x2="12" y2="14" />
-      <circle cx="12" cy="17" r="2.4" />
-    </svg>
   )
 }
 

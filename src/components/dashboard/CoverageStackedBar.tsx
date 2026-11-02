@@ -1,3 +1,4 @@
+import { roundPct } from '../../mock/areas'
 import { computeCountAxis } from './trendAxis'
 
 type CoverageStackedBarRow = { id: string; name: string; total_population: number; population_with_access: number }
@@ -48,7 +49,7 @@ export function CoverageStackedBar({ rows, selectedId, coveredLabel, notCoveredL
 
       {rows.map((row, index) => {
         const notCovered = row.total_population - row.population_with_access
-        const coveredPct = row.total_population > 0 ? Math.round((row.population_with_access / row.total_population) * 100) : 0
+        const coveredPct = row.total_population > 0 ? roundPct((row.population_with_access / row.total_population) * 100) : 0
         const x = xAt(index) - barWidth / 2
         const isSelected = row.id === selectedId
         return (

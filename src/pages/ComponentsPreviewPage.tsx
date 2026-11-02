@@ -104,9 +104,9 @@ const TABLE_COLUMNS: DataTableColumn<AreaRow>[] = [
 ]
 
 export function ComponentsPreviewPage() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
 
-  const districtOptions = getDistrictOptions()
+  const districtOptions = getDistrictOptions(language)
   const [selectedTypes, setSelectedTypes] = useState<(typeof opsTypeValues)[number][]>([opsTypeValues[0]])
   const [comparisonDistricts, setComparisonDistricts] = useState(defaultComparisonAreas)
   const [layerOn, setLayerOn] = useState(true)
@@ -117,7 +117,7 @@ export function ComponentsPreviewPage() {
   const [district, setDistrict] = useState(districtOptions[0].value)
   const [previewYear, setPreviewYear] = useState<Year>(defaultYear)
 
-  const districtRows = getAreaRowsForYear('district', previewYear)
+  const districtRows = getAreaRowsForYear('district', previewYear, language)
   const featuredDistrict = districtRows[0]!
 
   return (

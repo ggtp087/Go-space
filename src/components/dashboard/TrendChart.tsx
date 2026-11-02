@@ -1,3 +1,5 @@
+import { formatYear } from '../../i18n/formatYear'
+import type { Language } from '../../i18n/LanguageContext'
 import type { Year } from '../../mock/years'
 
 export type TrendChartPoint = { year: Year; value: number | null }
@@ -27,6 +29,8 @@ type TrendChartProps = {
   noDataLabel?: string
   /** Shown below the chart only when yMin > 0, e.g. "Axis does not start at 0" — so a zoomed-in axis is never silently misleading. */
   axisNote?: string
+  /** Converts every displayed year (axis labels, tooltips) to Buddhist Era in Thai mode — defaults to English/CE. */
+  language?: Language
 }
 
 const VIEW_WIDTH = 640
@@ -56,6 +60,7 @@ export function TrendChart({
   formatValue = (value) => String(Math.round(value * 10) / 10),
   noDataLabel = 'No data',
   axisNote,
+  language = 'en',
 }: TrendChartProps) {
   const resolvedSeries: TrendSeries[] = series ?? (points ? [{ points, color: color ?? DEFAULT_COLOR }] : [])
   const isMultiSeries = resolvedSeries.length > 1
@@ -115,7 +120,7 @@ export function TrendChart({
 
             {axisPoints.map((point, index) => (
               <text key={point.year} x={xAt(index)} y={height - 6} textAnchor="middle" fontSize="9.5" fill="var(--color-mist)">
-                {point.year}
+                {formatYear(point.year, language)}
               </text>
             ))}
 
@@ -163,7 +168,7 @@ export function TrendChart({
                       <circle key={c.year} cx={c.x} cy={height - MARGIN.bottom} r={2} fill="var(--color-mist-2)">
                         {!isMultiSeries && (
                           <title>
-                            {c.year}: {noDataLabel}
+                            {formatYear(c.year, language)}: {noDataLabel}
                           </title>
                         )}
                       </circle>
@@ -171,7 +176,7 @@ export function TrendChart({
                       <circle key={c.year} cx={c.x} cy={c.y} r={isMultiSeries ? 4 : 4.5} fill="#fff" stroke={s.color} strokeWidth={2.5}>
                         {!isMultiSeries && (
                           <title>
-                            {c.year}: {formatValue(c.value)}
+                            {formatYear(c.year, language)}: {formatValue(c.value)}
                             {unit}
                           </title>
                         )}
@@ -180,7 +185,7 @@ export function TrendChart({
                       <circle key={c.year} cx={c.x} cy={c.y} r={2.5} fill={s.color} opacity={0.55}>
                         {!isMultiSeries && (
                           <title>
-                            {c.year}: {formatValue(c.value)}
+                            {formatYear(c.year, language)}: {formatValue(c.value)}
                             {unit}
                           </title>
                         )}
@@ -230,7 +235,7 @@ export function TrendChart({
                 >
                   <title>
                     {[
-                      String(point.year),
+                      formatYear(point.year, language),
                       ...seriesCoords.map((s) => {
                         const value = s.coords[index].value
                         const valueText = value === null ? noDataLabel : `${formatValue(value)}${unit}`

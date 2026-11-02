@@ -1,9 +1,13 @@
+import { formatYear } from '../../i18n/formatYear'
+import type { Language } from '../../i18n/LanguageContext'
 import type { TrendChartPoint } from './TrendChart'
 
 type DeltaBarChartProps = {
   points: TrendChartPoint[]
   height?: number
   unit?: string
+  /** Converts every displayed year (axis labels, tooltips) to Buddhist Era in Thai mode — defaults to English/CE. */
+  language?: Language
 }
 
 const VIEW_WIDTH = 640
@@ -20,7 +24,7 @@ function round1(value: number): number {
  * off the slope by eye. The first year has no previous value, so it has no
  * bar (matches TrendChart's own "first year of data" treatment).
  */
-export function DeltaBarChart({ points, height = 110, unit = 'pp' }: DeltaBarChartProps) {
+export function DeltaBarChart({ points, height = 110, unit = 'pp', language = 'en' }: DeltaBarChartProps) {
   const deltas = points.map((point, index) => {
     const prev = index > 0 ? points[index - 1].value : null
     const delta = point.value !== null && prev !== null ? round1(point.value - prev) : null
@@ -52,7 +56,7 @@ export function DeltaBarChart({ points, height = 110, unit = 'pp' }: DeltaBarCha
           <g key={d.year}>
             <rect x={xAt(index) - barWidth / 2} y={y} width={barWidth} height={barH} fill={color} rx={2}>
               <title>
-                {d.year}: {d.delta > 0 ? '+' : ''}
+                {formatYear(d.year, language)}: {d.delta > 0 ? '+' : ''}
                 {d.delta} {unit}
               </title>
             </rect>
@@ -65,7 +69,7 @@ export function DeltaBarChart({ points, height = 110, unit = 'pp' }: DeltaBarCha
       })}
       {deltas.map((d, index) => (
         <text key={d.year} x={xAt(index)} y={height - 6} textAnchor="middle" fontSize="9.5" fill="var(--color-mist)">
-          {d.year}
+          {formatYear(d.year, language)}
         </text>
       ))}
     </svg>

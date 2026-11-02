@@ -1,4 +1,5 @@
 import { useId, useState, type InputHTMLAttributes, type ReactNode } from 'react'
+import { useLanguage } from '../../i18n/LanguageContext'
 
 type InputProps = InputHTMLAttributes<HTMLInputElement> & {
   label?: string
@@ -18,6 +19,7 @@ export function Input({
   className = '',
   ...rest
 }: InputProps) {
+  const { t } = useLanguage()
   const generatedId = useId()
   const inputId = id ?? generatedId
   const [revealed, setRevealed] = useState(false)
@@ -45,7 +47,7 @@ export function Input({
           <button
             type="button"
             onClick={() => setRevealed((v) => !v)}
-            aria-label={revealed ? 'Hide password' : 'Show password'}
+            aria-label={revealed ? t.common.hidePassword : t.common.showPassword}
             className="absolute right-[13px] top-1/2 -translate-y-1/2 border-none bg-transparent p-0 text-mist"
           >
             {revealed ? <EyeOffIcon /> : <EyeIcon />}

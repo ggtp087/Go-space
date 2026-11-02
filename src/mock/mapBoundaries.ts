@@ -8,8 +8,8 @@ import type { Feature, FeatureCollection, MultiPolygon, Polygon, Position } from
 // Everything here is generated deterministically from fixed constants (no
 // Math.random), so the shapes are stable across reloads and between runs.
 
-export type DistrictProperties = { id: string; name: string }
-export type SubDistrictProperties = { id: string; name: string; district_id: string }
+export type DistrictProperties = { id: string; name: string; name_th: string }
+export type SubDistrictProperties = { id: string; name: string; name_th: string; district_id: string }
 
 // Rough target extent for the outline, per spec: lat 13.49-13.96, lon 100.33-100.94.
 export const OUTLINE_CENTER: Position = [100.635, 13.725] // [lon, lat]
@@ -150,7 +150,7 @@ function buildBoundaries(): {
     const id = `geo-subdistrict-${index + 1}`
     return {
       type: 'Feature',
-      properties: { id, name: `Sub-district ${index + 1}`, district_id: districtId },
+      properties: { id, name: `Sub-district ${index + 1}`, name_th: `แขวง ${index + 1}`, district_id: districtId },
       geometry: { type: 'Polygon', coordinates: [rectangleRing(cell.minLon, cell.minLat, cell.maxLon, cell.maxLat)] },
     }
   })
@@ -170,7 +170,7 @@ function buildBoundaries(): {
   const districtFeatures: Feature<MultiPolygon, DistrictProperties>[] = Array.from(memberCellsByDistrict.entries()).map(
     ([districtId, members], index) => ({
       type: 'Feature',
-      properties: { id: districtId, name: `District ${index + 1}` },
+      properties: { id: districtId, name: `District ${index + 1}`, name_th: `เขต ${index + 1}` },
       geometry: { type: 'MultiPolygon', coordinates: members.map((feature) => feature.geometry.coordinates) },
     }),
   )

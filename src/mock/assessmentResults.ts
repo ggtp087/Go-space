@@ -1,10 +1,14 @@
 import type { AreaLevel } from './areas'
-import { clamp, deterministicNoise } from './areas'
+import { clamp, deterministicNoise, localizedName } from './areas'
 import { mockDistrictBoundaries, mockSubDistrictBoundaries, ringAreaSqm } from './mapBoundaries'
 import { mockOpsPoints } from './opsPoints'
 import { comparisonPalette } from '../config/mapStyle'
 import { opsTypeValues, type OpsType } from '../config/opsTypes'
 import { availableYears, type Year } from './years'
+import type { Language } from '../i18n/LanguageContext'
+
+const BANGKOK_NAME_EN = 'Bangkok'
+const BANGKOK_NAME_TH = 'กรุงเทพมหานคร'
 
 // The one area dataset for Map, Dashboard, and Compare — sub-district is the
 // base level (one row per subdistrict_id × year, mock but deterministic, no
@@ -221,58 +225,82 @@ export function getAssessmentResult(areaId: string, year: Year): RolledUpResult 
 
 type AreaMeta = { id: string; name: string; level: AreaLevel; parentId: string | null; parentName: string | null }
 
-const districtNameById = new Map(mockDistrictBoundaries.features.map((feature) => [feature.properties.id, feature.properties.name]))
+const districtFeatureById = new Map(mockDistrictBoundaries.features.map((feature) => [feature.properties.id, feature.properties]))
 
-export function getAreaMeta(id: string): AreaMeta | undefined {
-  if (id === BANGKOK_AREA_ID) return { id, name: 'Bangkok', level: 'district', parentId: null, parentName: null }
+export function getAreaMeta(id: string, language: Language): AreaMeta | undefined {
+  if (id === BANGKOK_AREA_ID) {
+    return { id, name: localizedName(BANGKOK_NAME_EN, BANGKOK_NAME_TH, language), level: 'district', parentId: null, parentName: null }
+  }
 
   const district = mockDistrictBoundaries.features.find((feature) => feature.properties.id === id)
-  if (district) return { id, name: district.properties.name, level: 'district', parentId: null, parentName: null }
+  if (district) {
+    return {
+      id,
+      name: localizedName(district.properties.name, district.properties.name_th, language),
+      level: 'district',
+      parentId: null,
+      parentName: null,
+    }
+  }
 
   const subDistrict = mockSubDistrictBoundaries.features.find((feature) => feature.properties.id === id)
   if (subDistrict) {
     const parentId = subDistrict.properties.district_id
-    return { id, name: subDistrict.properties.name, level: 'sub-district', parentId, parentName: districtNameById.get(parentId) ?? null }
+    const parentFeature = districtFeatureById.get(parentId)
+    return {
+      id,
+      name: localizedName(subDistrict.properties.name, subDistrict.properties.name_th, language),
+      level: 'sub-district',
+      parentId,
+      parentName: parentFeature ? localizedName(parentFeature.name, parentFeature.name_th, language) : null,
+    }
   }
 
   return undefined
 }
 
-export function getAreaRow(id: string, year: Year): AreaRow | undefined {
-  const meta = getAreaMeta(id)
+export function getAreaRow(id: string, year: Year, language: Language): AreaRow | undefined {
+  const meta = getAreaMeta(id, language)
   const stats = getAssessmentResult(id, year)
   if (!meta || !stats) return undefined
   return { ...stats, id: meta.id, name: meta.name, level: meta.level, parentId: meta.parentId, year }
 }
 
-export function getAreaRowsForYear(level: AreaLevel, year: Year): AreaRow[] {
+export function getAreaRowsForYear(level: AreaLevel, year: Year, language: Language): AreaRow[] {
   const ids = level === 'district' ? mockDistrictBoundaries.features.map((feature) => feature.properties.id) : allSubDistrictIds
-  return ids.map((id) => getAreaRow(id, year)).filter((row): row is AreaRow => row !== undefined)
+  return ids.map((id) => getAreaRow(id, year, language)).filter((row): row is AreaRow => row !== undefined)
 }
 
 export function areaHasAnyData(id: string): boolean {
-  return getAreaMeta(id) !== undefined
+  if (id === BANGKOK_AREA_ID) return true
+  return (
+    mockDistrictBoundaries.features.some((feature) => feature.properties.id === id) ||
+    mockSubDistrictBoundaries.features.some((feature) => feature.properties.id === id)
+  )
 }
 
 /** All districts, or (for one district) just its own sub-districts — the one scoped list the Dashboard's choropleth, brackets, ranking, and table all share. */
-export function getChildAreaRows(districtId: string, year: Year): AreaRow[] {
-  if (districtId === 'all') return getAreaRowsForYear('district', year)
+export function getChildAreaRows(districtId: string, year: Year, language: Language): AreaRow[] {
+  if (districtId === 'all') return getAreaRowsForYear('district', year, language)
   const subDistrictIds = subDistrictIdsByDistrict.get(districtId) ?? []
-  return subDistrictIds.map((id) => getAreaRow(id, year)).filter((row): row is AreaRow => row !== undefined)
+  return subDistrictIds.map((id) => getAreaRow(id, year, language)).filter((row): row is AreaRow => row !== undefined)
 }
 
 export function getFirstAreaId(level: AreaLevel): string {
   return level === 'district' ? mockDistrictBoundaries.features[0].properties.id : allSubDistrictIds[0]
 }
 
-export function getDistrictOptions(): { value: string; label: string }[] {
-  return mockDistrictBoundaries.features.map((feature) => ({ value: feature.properties.id, label: feature.properties.name }))
+export function getDistrictOptions(language: Language): { value: string; label: string }[] {
+  return mockDistrictBoundaries.features.map((feature) => ({
+    value: feature.properties.id,
+    label: localizedName(feature.properties.name, feature.properties.name_th, language),
+  }))
 }
 
-export function getAllSubDistrictOptions(): { value: string; label: string; parentId: string }[] {
+export function getAllSubDistrictOptions(language: Language): { value: string; label: string; parentId: string }[] {
   return mockSubDistrictBoundaries.features.map((feature) => ({
     value: feature.properties.id,
-    label: feature.properties.name,
+    label: localizedName(feature.properties.name, feature.properties.name_th, language),
     parentId: feature.properties.district_id,
   }))
 }
@@ -287,7 +315,10 @@ export function getMetricSeries(id: string, metric: MetricKey): { year: Year; va
 // District A, D, J's old role — highest/median/lowest accessibility, picked
 // dynamically now that district ids are generated rather than hand-authored.
 function buildDefaultComparisonAreas(): ComparisonArea[] {
-  const districtRows = getAreaRowsForYear('district', ANCHOR_YEAR).sort((a, b) => b.access_pct - a.access_pct)
+  // Names picked here are only a seed value — ComparePage re-resolves each
+  // area's display name from its id on every render, so this frozen-at-init
+  // English name never actually reaches the screen.
+  const districtRows = getAreaRowsForYear('district', ANCHOR_YEAR, 'en').sort((a, b) => b.access_pct - a.access_pct)
   const picks = [districtRows[0], districtRows[Math.floor(districtRows.length / 2)], districtRows[districtRows.length - 1]]
   return picks.map((row, index) => ({ id: row.id, name: row.name, color: comparisonPalette[index], level: 'district' as const }))
 }

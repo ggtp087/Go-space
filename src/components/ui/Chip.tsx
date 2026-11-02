@@ -1,3 +1,5 @@
+import { useLanguage } from '../../i18n/LanguageContext'
+
 type ChipProps = {
   label: string
   /** Selectable pill (e.g. filter chips): highlighted when true. */
@@ -12,6 +14,7 @@ type ChipProps = {
 }
 
 export function Chip({ label, selected = false, onSelect, removable = false, swatchColor, onRemove, action }: ChipProps) {
+  const { t } = useLanguage()
   if (removable) {
     return (
       <span className="inline-flex items-center gap-2 rounded-full border-[1.5px] border-line-2 bg-white py-[7px] pl-3.5 pr-[7px] text-[13px] font-semibold text-ink">
@@ -29,7 +32,7 @@ export function Chip({ label, selected = false, onSelect, removable = false, swa
         <button
           type="button"
           onClick={onRemove}
-          aria-label={`Remove ${label}`}
+          aria-label={t.common.removeItem.replace('{item}', label)}
           className="flex h-5 w-5 flex-none items-center justify-center rounded-full border-none bg-bg text-slate"
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round">
