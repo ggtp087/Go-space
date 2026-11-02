@@ -6,17 +6,30 @@ import type { OpsType } from './opsTypes'
 // rendering logic.
 export const mapStyle = {
   subDistrict: {
-    fillColor: '#D4B33B',
+    fillColor: '#F4EFE3',
     fillOpacity: 1,
-    color: '#222222',
-    weight: 1.5,
+    // GIS mode: a light neutral stroke, dashed, so it reads as the finer
+    // "inner" boundary against the heavier solid district line.
+    color: '#A8A29E',
+    weight: 0.8,
+    dashArray: '3 3',
+    // OSM/Satellite: no fill there, so the stroke needs to read on its own
+    // over imagery of any brightness — white, with a dark halo drawn just
+    // underneath it (getSubDistrictHaloStyle) rather than relying on
+    // opacity alone, so it stays visible over both light and dark patches.
+    outlineColor: '#FFFFFF',
+    outlineWeight: 1,
+    haloColor: '#1F3A5F',
+    haloWeight: 3,
+    haloOpacity: 0.55,
   },
   district: {
-    // Same stroke color as sub-district, kept visually distinct purely by
-    // a heavier weight so it reads as the outer boundary.
-    fillColor: '#D4B33B',
+    // A darker, heavier navy stroke than sub-district's, on every basemap —
+    // reads as the outer boundary regardless of GIS fill vs. OSM/Satellite
+    // outline-only rendering.
+    fillColor: '#F4EFE3',
     fillOpacity: 1,
-    color: '#222222',
+    color: '#1F3A5F',
     weight: 2.5,
   },
   opsPoint: {
@@ -58,7 +71,7 @@ export const mapStyle = {
   // district/sub-district boundary toggles, so picking an area always shows
   // where it is.
   highlight: {
-    color: '#111111',
+    color: '#1F3A5F',
     weight: 4,
   },
 }
@@ -100,13 +113,22 @@ export function getAccessibilityColor(pct: number): string {
 
 /**
  * Choropleth fill for a district/sub-district polygon, colored by its own
- * access_pct — reuses the sub-district/district stroke/weight tokens above
- * (so it still reads as the same kind of boundary) with the fill swapped
- * for the accessibility color instead of the GIS gold.
+ * access_pct — reuses the sub-district/district stroke/weight/dashArray
+ * tokens above (so it still reads as the same kind of boundary as the Map
+ * page's own GIS-mode rendering) with the fill swapped for the
+ * accessibility color instead of the neutral boundary fill.
  */
 export function getChoroplethStyle(fillColor: string, level: 'district' | 'sub-district'): PathOptions {
   const base = level === 'district' ? mapStyle.district : mapStyle.subDistrict
-  return { color: base.color, weight: base.weight, fillColor, fillOpacity: 0.85, fill: true, interactive: false }
+  return {
+    color: base.color,
+    weight: base.weight,
+    dashArray: level === 'sub-district' ? mapStyle.subDistrict.dashArray : undefined,
+    fillColor,
+    fillOpacity: 0.85,
+    fill: true,
+    interactive: false,
+  }
 }
 
 // "Zoom to service area" fitBounds padding (px per side) — keeps the
@@ -127,13 +149,33 @@ export const zoomPadding = {
  * tiles stay visible underneath.
  */
 export function getSubDistrictStyle(filled: boolean): PathOptions {
-  if (!filled) return { color: mapStyle.subDistrict.color, weight: mapStyle.subDistrict.weight, fill: false, interactive: false }
+  if (!filled) {
+    return { color: mapStyle.subDistrict.outlineColor, weight: mapStyle.subDistrict.outlineWeight, fill: false, interactive: false }
+  }
   return {
     color: mapStyle.subDistrict.color,
     weight: mapStyle.subDistrict.weight,
+    dashArray: mapStyle.subDistrict.dashArray,
     fillColor: mapStyle.subDistrict.fillColor,
     fillOpacity: mapStyle.subDistrict.fillOpacity,
     fill: true,
+    interactive: false,
+  }
+}
+
+/**
+ * The dark outline drawn just underneath the white sub-district stroke in
+ * OSM/Satellite mode (getSubDistrictStyle(false)) — a halo rather than
+ * relying on opacity alone, so a thin white line stays visible over
+ * imagery of any brightness. Not used in GIS mode, where the sub-district
+ * stroke already reads clearly against the flat fill.
+ */
+export function getSubDistrictHaloStyle(): PathOptions {
+  return {
+    color: mapStyle.subDistrict.haloColor,
+    weight: mapStyle.subDistrict.haloWeight,
+    opacity: mapStyle.subDistrict.haloOpacity,
+    fill: false,
     interactive: false,
   }
 }

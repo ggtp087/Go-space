@@ -13,6 +13,7 @@ import {
   getOpsPointStyle,
   getOpsTypeColor,
   getServiceAreaStyle,
+  getSubDistrictHaloStyle,
   getSubDistrictStyle,
   mapStyle,
   zoomPadding,
@@ -533,6 +534,9 @@ export function MapPage() {
                 pointer-events is what actually makes the click fall through
                 to the pane below at the browser level. */}
             <Pane name="subdistrict-pane" style={{ zIndex: 401, pointerEvents: 'none' }}>
+              {layerState['subdistrict-boundaries'] && !isGisBasemap && (
+                <GeoJSON data={mapData.subDistricts} style={getSubDistrictHaloStyle()} />
+              )}
               {layerState['subdistrict-boundaries'] && (
                 <GeoJSON data={mapData.subDistricts} style={getSubDistrictStyle(isGisBasemap)} />
               )}
