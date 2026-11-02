@@ -49,7 +49,6 @@ export const en = {
       sports_ground: 'Sports grounds',
     },
     districtLabel: 'District',
-    accessibilityRangeLabel: 'Accessibility range',
     adminLevelLabel: 'Admin level',
     areaDetailsTitle: 'Area details',
     bangkokLabel: 'Bangkok',
@@ -62,6 +61,8 @@ export const en = {
     nearbySectionTitle: 'Nearby public spaces',
     addToComparison: 'Add to comparison',
     trendSectionTitle: 'Accessibility, 2017–2026',
+    activeLayersLegendTitle: 'Legend',
+    networkLegendLabel: 'Network within 400 m',
   },
   adminLevel: {
     district: 'District',
@@ -319,6 +320,8 @@ export const th: DeepPartial<Strings> = {
       park_15min: 'สวน 15 นาที',
       sports_ground: 'ลานกีฬา',
     },
+    activeLayersLegendTitle: 'คำอธิบายสัญลักษณ์',
+    networkLegendLabel: 'โครงข่ายถนนภายใน 400 เมตร',
   },
   dashboard: {
     pageSubtitle: 'ตัวชี้วัด SDG 11.7.1 · แหล่งข้อมูล: กรุงเทพมหานคร, WorldPop · ข้อมูลตัวอย่างเพื่อการสาธิต',

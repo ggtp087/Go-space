@@ -46,10 +46,11 @@ export function Chip({ label, selected = false, onSelect, removable = false, swa
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
-      className={`rounded-full border px-[11px] py-[5px] text-xs font-medium transition-colors ${
+      className={`inline-flex items-center gap-1.5 rounded-full border px-[11px] py-[5px] text-xs font-medium transition-colors ${
         selected ? 'border-green-500 bg-green-100 font-semibold text-green-800' : 'border-line-2 bg-white text-slate'
       }`}
     >
+      {swatchColor && <span className="h-2 w-2 flex-none rounded-full" style={{ background: swatchColor }} />}
       {label}
     </button>
   )

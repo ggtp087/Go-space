@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { GeoJSON, MapContainer, Pane, ScaleControl, TileLayer, useMapEvents } from 'react-leaflet'
 import { circleMarker } from 'leaflet'
-import type { FitBoundsOptions, LatLng, LatLngBoundsExpression, LatLngTuple, Map as LeafletMap } from 'leaflet'
+import type { FitBoundsOptions, LatLng, LatLngBoundsExpression, LatLngTuple, Map as LeafletMap, PathOptions } from 'leaflet'
 import type { Feature, GeometryObject, MultiPolygon, Point, Position } from 'geojson'
 import 'leaflet/dist/leaflet.css'
 import {
@@ -14,17 +14,16 @@ import {
   getOpsTypeColor,
   getServiceAreaStyle,
   getSubDistrictStyle,
+  mapStyle,
   zoomPadding,
 } from '../config/mapStyle'
 import { getMapData, getOpsAnalysis, type Bbox, type OpsAnalysis } from '../mock/mapData'
 import { bangkokOutlineRing, getDistrictFeature, getSubDistrictFeature } from '../mock/mapBoundaries'
 import type { OpsPointProperties } from '../mock/opsPoints'
-import { opsTypeFilterValues, type OpsTypeFilter } from '../config/opsTypes'
+import { opsTypeFilterValues, opsTypeValues, type OpsTypeFilter } from '../config/opsTypes'
 import { Chip } from '../components/ui/Chip'
 import { DonutChart } from '../components/ui/DonutChart'
-import { Legend } from '../components/ui/Legend'
 import { ProgressBar } from '../components/ui/ProgressBar'
-import { RangeSlider } from '../components/ui/RangeSlider'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
 import { SidePanel } from '../components/ui/SidePanel'
@@ -35,7 +34,6 @@ import { Button } from '../components/ui/Button'
 import { useLanguage } from '../i18n/LanguageContext'
 import { useYear } from '../state/YearContext'
 import { useArea } from '../state/AreaContext'
-import { accessibilityLegendSteps } from '../mock/accessibilityLegend'
 import { basemapOptions } from '../mock/basemaps'
 import { roundPct } from '../mock/areas'
 import { BANGKOK_AREA_ID, areaHasAnyData, getAreaMeta, getAreaRow, getMetricSeries } from '../mock/assessmentResults'
@@ -117,7 +115,6 @@ export function MapPage() {
     Object.fromEntries(mapLayers.map((layer) => [layer.id, layer.defaultOn])),
   )
   const [selectedType, setSelectedType] = useState<OpsTypeFilter>('all')
-  const [range, setRange] = useState<[number, number]>([22, 85])
   const [basemap, setBasemap] = useState(basemapOptions[0].value)
   const activeBasemap = basemapOptions.find((option) => option.value === basemap) ?? basemapOptions[0]
 
@@ -381,24 +378,70 @@ export function MapPage() {
   const focusHasAnyData = areaHasAnyData(focusAreaId)
   const trendSeries = getMetricSeries(focusAreaId, 'access_pct')
 
+  const districtLayer = mapLayers.find((layer) => layer.id === 'district-boundaries')
+  const subDistrictLayer = mapLayers.find((layer) => layer.id === 'subdistrict-boundaries')
+  const openSpacesLayer = mapLayers.find((layer) => layer.id === 'open-spaces')
+  const serviceAreasLayer = mapLayers.find((layer) => layer.id === 'service-areas')
+
+  // Only what's actually drawn right now — not just what's toggled on, so
+  // e.g. a service-areas toggle with zero visible points doesn't still list
+  // a swatch for nothing.
+  const legendRows: { id: string; label: string; swatch: ReactNode }[] = []
+  if (layerState['open-spaces'] && visibleOpsPoints.features.length > 0 && openSpacesLayer) {
+    legendRows.push({ id: 'open-spaces', label: openSpacesLayer.label, swatch: <OpsTypeSwatch /> })
+  }
+  const zoomedServiceAreaVisible = isZoomedIn && selectedOpsAnalysis && analysisVisibility.serviceArea
+  if ((allServiceAreas || zoomedServiceAreaVisible) && serviceAreasLayer) {
+    legendRows.push({ id: 'service-areas', label: serviceAreasLayer.label, swatch: <StyleSwatch style={getAllServiceAreasStyle()} /> })
+  }
+  if (layerState['district-boundaries'] && districtLayer) {
+    legendRows.push({
+      id: 'district-boundaries',
+      label: districtLayer.label,
+      swatch: (
+        <StyleSwatch
+          style={{
+            color: mapStyle.district.color,
+            weight: mapStyle.district.weight,
+            fill: isGisBasemap,
+            fillColor: mapStyle.district.fillColor,
+            fillOpacity: mapStyle.district.fillOpacity,
+          }}
+        />
+      ),
+    })
+  }
+  if (layerState['subdistrict-boundaries'] && subDistrictLayer) {
+    legendRows.push({
+      id: 'subdistrict-boundaries',
+      label: subDistrictLayer.label,
+      swatch: <StyleSwatch style={getSubDistrictStyle(isGisBasemap)} />,
+    })
+  }
+  if (isZoomedIn && selectedOpsAnalysis && analysisVisibility.network) {
+    legendRows.push({ id: 'network', label: t.map.networkLegendLabel, swatch: <StyleSwatch style={getNetworkStyle()} /> })
+  }
+
   return (
     <div className="flex min-h-0 flex-1">
       <SidePanel title={t.map.filtersTitle} collapsed={leftCollapsed} onToggleCollapse={() => setLeftCollapsed((v) => !v)}>
         <div className="mb-6">
           <SectionTitle>{t.map.layersSectionTitle}</SectionTitle>
-          {mapLayers.map((layer) => (
-            <div key={layer.id} className="flex items-center justify-between py-[7px]">
-              <span className="flex items-center gap-2.5 text-[13.5px] text-ink">
-                <LayerSwatch layer={layer} />
-                {layer.label}
-              </span>
-              <Toggle
-                checked={layerState[layer.id]}
-                onChange={(checked) => setLayerState((current) => ({ ...current, [layer.id]: checked }))}
-                label={layer.label}
-              />
-            </div>
-          ))}
+          {mapLayers
+            .filter((layer) => layer.enabled)
+            .map((layer) => (
+              <div key={layer.id} className="flex items-center justify-between py-[7px]">
+                <span className="flex items-center gap-2.5 text-[13.5px] text-ink">
+                  <LayerSwatch layerId={layer.id} isGisBasemap={isGisBasemap} />
+                  {layer.label}
+                </span>
+                <Toggle
+                  checked={layerState[layer.id]}
+                  onChange={(checked) => setLayerState((current) => ({ ...current, [layer.id]: checked }))}
+                  label={layer.label}
+                />
+              </div>
+            ))}
         </div>
 
         <div>
@@ -413,6 +456,7 @@ export function MapPage() {
                   label={t.map.opsTypes[value]}
                   selected={selectedType === value}
                   onSelect={() => setSelectedType(value)}
+                  swatchColor={value === 'all' ? undefined : getOpsTypeColor(value)}
                 />
               ))}
             </div>
@@ -435,11 +479,6 @@ export function MapPage() {
               onChange={(event) => setSubDistrictId(event.target.value)}
               disabled={isWholeCity}
             />
-          </div>
-
-          <div className="mb-3.5">
-            <FieldLabel>{t.map.accessibilityRangeLabel}</FieldLabel>
-            <RangeSlider min={0} max={100} value={range} onChange={setRange} formatLabel={(v) => `${v}%`} />
           </div>
 
           <div>
@@ -605,9 +644,11 @@ export function MapPage() {
             </button>
           </div>
 
-          <div className="pointer-events-auto absolute bottom-5 left-5">
-            <Legend title={t.map.legendTitle} note={t.map.legendNote} steps={accessibilityLegendSteps} />
-          </div>
+          {legendRows.length > 0 && (
+            <div className="pointer-events-auto absolute bottom-5 left-5">
+              <MapLegendCard title={t.map.activeLayersLegendTitle} rows={legendRows} />
+            </div>
+          )}
 
           {selectedOpsFeature && selectedOpsAnalysis && (
             <div
@@ -898,13 +939,73 @@ function CloseIcon() {
   )
 }
 
-function LayerSwatch({ layer }: { layer: (typeof mapLayers)[number] }) {
-  if (layer.variant === 'fill') return <span className="h-3 w-3 flex-none rounded-[3px]" style={{ background: layer.color }} />
-  if (layer.variant === 'fill-soft')
-    return <span className="h-3 w-3 flex-none rounded-[3px]" style={{ background: layer.color, opacity: 0.5 }} />
-  if (layer.variant === 'outline')
-    return <span className="h-3 w-3 flex-none rounded-[3px]" style={{ border: `2px solid ${layer.color}` }} />
-  return <span className="h-3 w-3 flex-none rounded-[3px]" style={{ border: `1px dashed ${layer.color}` }} />
+/**
+ * Renders a Leaflet PathOptions object as a small swatch — border from
+ * color/weight/dashArray, fill from fillColor/fillOpacity — so it can never
+ * drift from what's actually drawn on the map (no hand-picked hex here).
+ */
+function StyleSwatch({ style }: { style: PathOptions }) {
+  const weight = typeof style.weight === 'number' ? style.weight : 1
+  const borderWidth = Math.max(1, Math.round(weight))
+  const hasFill = style.fill !== false && Boolean(style.fillColor)
+  return (
+    <span
+      className="relative h-3 w-3 flex-none overflow-hidden rounded-[3px]"
+      style={{ border: `${borderWidth}px ${style.dashArray ? 'dashed' : 'solid'} ${style.color ?? 'transparent'}` }}
+    >
+      {hasFill && (
+        <span className="absolute inset-0" style={{ background: style.fillColor as string, opacity: (style.fillOpacity as number) ?? 1 }} />
+      )}
+    </span>
+  )
+}
+
+/** The 4 OPS type colors as a small dot cluster — used wherever "public green & open spaces" as a whole needs one swatch. */
+function OpsTypeSwatch() {
+  return (
+    <span className="grid h-3 w-3 flex-none grid-cols-2 grid-rows-2 gap-[1px]">
+      {opsTypeValues.map((type) => (
+        <span key={type} className="rounded-full" style={{ background: getOpsTypeColor(type) }} />
+      ))}
+    </span>
+  )
+}
+
+/** Resolves the right swatch for a sidebar layer id — district/sub-district read mapStyle directly so GIS vs. OSM/Satellite (filled vs. outline-only) always matches what's drawn. */
+function LayerSwatch({ layerId, isGisBasemap }: { layerId: string; isGisBasemap: boolean }) {
+  if (layerId === 'open-spaces') return <OpsTypeSwatch />
+  if (layerId === 'service-areas') return <StyleSwatch style={getAllServiceAreasStyle()} />
+  if (layerId === 'subdistrict-boundaries') return <StyleSwatch style={getSubDistrictStyle(isGisBasemap)} />
+  if (layerId === 'district-boundaries') {
+    return (
+      <StyleSwatch
+        style={{
+          color: mapStyle.district.color,
+          weight: mapStyle.district.weight,
+          fill: isGisBasemap,
+          fillColor: mapStyle.district.fillColor,
+          fillOpacity: mapStyle.district.fillOpacity,
+        }}
+      />
+    )
+  }
+  return null
+}
+
+function MapLegendCard({ title, rows }: { title: string; rows: { id: string; label: string; swatch: ReactNode }[] }) {
+  return (
+    <div className="w-[220px] rounded-xl border border-line bg-card p-[14px_16px] shadow-card">
+      <p className="mb-2 text-xs font-bold text-ink">{title}</p>
+      <div className="flex flex-col gap-[7px]">
+        {rows.map((row) => (
+          <div key={row.id} className="flex items-center gap-2 text-[12px] text-slate">
+            {row.swatch}
+            {row.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function TreeIcon() {
