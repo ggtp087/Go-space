@@ -22,6 +22,9 @@ function resolveStrings(language: Language): Strings {
       columns: { ...en.dashboard.columns, ...th.dashboard?.columns },
       kpi: { ...en.dashboard.kpi, ...th.dashboard?.kpi },
       trend: { ...en.dashboard.trend, ...th.dashboard?.trend },
+      sections: { ...en.dashboard.sections, ...th.dashboard?.sections },
+      charts: { ...en.dashboard.charts, ...th.dashboard?.charts },
+      controlBar: { ...en.dashboard.controlBar, ...th.dashboard?.controlBar },
     },
     compare: { ...en.compare, ...th.compare },
     auth: {

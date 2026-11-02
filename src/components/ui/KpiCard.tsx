@@ -5,9 +5,11 @@ type KpiCardProps = {
   value: string
   label: string
   tone?: 'green' | 'amber'
+  /** Optional extra content below the label — e.g. a compact DeltaBadge. */
+  extra?: ReactNode
 }
 
-export function KpiCard({ icon, value, label, tone = 'green' }: KpiCardProps) {
+export function KpiCard({ icon, value, label, tone = 'green', extra }: KpiCardProps) {
   return (
     <div className="rounded-[14px] border border-line bg-card p-[18px]">
       <div
@@ -19,6 +21,7 @@ export function KpiCard({ icon, value, label, tone = 'green' }: KpiCardProps) {
       </div>
       <div className="text-[26px] font-bold leading-[1.1] text-ink tabular-nums">{value}</div>
       <div className="mt-[5px] text-xs leading-[1.4] text-slate">{label}</div>
+      {extra && <div className="mt-1.5 text-[11px]">{extra}</div>}
     </div>
   )
 }

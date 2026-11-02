@@ -97,7 +97,7 @@ function buildInitialComparisonAreas(districtId: string, subDistrictId: string, 
 }
 
 export function ComparePage() {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const { year, setYear, years } = useYear()
   const { level, setLevel, districtId, setDistrictId, subDistrictId, setSubDistrictId } = useArea()
 
@@ -375,7 +375,7 @@ export function ComparePage() {
                             {index === 0 ? (
                               <span className="text-mist">{t.compare.referenceBadge}</span>
                             ) : value !== null && referenceValue !== null ? (
-                              <DeltaBadge delta={value - referenceValue} noChangeLabel={t.dashboard.trend.noChange} compact />
+                              <DeltaBadge currentValue={value} compareValue={referenceValue} kind="vsReference" compact t={t} language={language} />
                             ) : null}
                           </div>
                         )}
@@ -479,9 +479,11 @@ export function ComparePage() {
                       <span className="text-mist">{t.compare.referenceBadge}</span>
                     ) : referenceRow ? (
                       <DeltaBadge
-                        delta={item.row.access_pct - referenceRow.access_pct}
-                        noChangeLabel={t.dashboard.trend.noChange}
-                        suffix={t.compare.vsReference}
+                        currentValue={item.row.access_pct}
+                        compareValue={referenceRow.access_pct}
+                        kind="vsReference"
+                        t={t}
+                        language={language}
                       />
                     ) : null}
                   </p>
@@ -518,9 +520,11 @@ export function ComparePage() {
                         <span className="text-mist">{t.compare.referenceBadge}</span>
                       ) : referenceRow ? (
                         <DeltaBadge
-                          delta={item.row.share_ops_pct - referenceRow.share_ops_pct}
-                          noChangeLabel={t.dashboard.trend.noChange}
-                          suffix={t.compare.vsReference}
+                          currentValue={item.row.share_ops_pct}
+                          compareValue={referenceRow.share_ops_pct}
+                          kind="vsReference"
+                          t={t}
+                          language={language}
                         />
                       ) : null}
                     </p>

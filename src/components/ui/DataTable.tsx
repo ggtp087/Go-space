@@ -29,6 +29,15 @@ type DataTableProps<T> = {
   getRowId: (row: T) => string | number
   defaultSortKey?: string
   defaultSortDir?: SortDirection
+  /**
+   * Controlled sort — when both are given, the table reads/writes sort
+   * through these instead of managing it internally, so an external control
+   * (e.g. a "Sort by" dropdown) can never drift out of sync with the
+   * column-header sort.
+   */
+  sortKey?: string
+  sortDir?: SortDirection
+  onSortChange?: (key: string, dir: SortDirection) => void
   footer?: ReactNode
 }
 
@@ -38,10 +47,16 @@ export function DataTable<T extends Record<string, unknown>>({
   getRowId,
   defaultSortKey,
   defaultSortDir = 'desc',
+  sortKey: controlledSortKey,
+  sortDir: controlledSortDir,
+  onSortChange,
   footer,
 }: DataTableProps<T>) {
-  const [sortKey, setSortKey] = useState(defaultSortKey)
-  const [sortDir, setSortDir] = useState<SortDirection>(defaultSortDir)
+  const [internalSortKey, setInternalSortKey] = useState(defaultSortKey)
+  const [internalSortDir, setInternalSortDir] = useState<SortDirection>(defaultSortDir)
+  const isControlled = controlledSortKey !== undefined && onSortChange !== undefined
+  const sortKey = isControlled ? controlledSortKey : internalSortKey
+  const sortDir = isControlled ? (controlledSortDir ?? 'desc') : internalSortDir
 
   const sortedRows = useMemo(() => {
     const column = columns.find((c) => c.key === sortKey)
@@ -56,11 +71,12 @@ export function DataTable<T extends Record<string, unknown>>({
   }, [rows, sortKey, sortDir, columns])
 
   function handleSort(key: string) {
-    if (sortKey === key) {
-      setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'))
+    const nextDir: SortDirection = sortKey === key ? (sortDir === 'asc' ? 'desc' : 'asc') : 'desc'
+    if (isControlled) {
+      onSortChange(key, nextDir)
     } else {
-      setSortKey(key)
-      setSortDir('desc')
+      setInternalSortKey(key)
+      setInternalSortDir(nextDir)
     }
   }
 
