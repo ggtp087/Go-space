@@ -3,9 +3,15 @@ import { GeoJSON, MapContainer, Pane, useMap } from 'react-leaflet'
 import type { LatLngTuple } from 'leaflet'
 import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon, Position } from 'geojson'
 import 'leaflet/dist/leaflet.css'
-import { getAccessibilityColor, getChoroplethStyle, getHighlightStyle } from '../../config/mapStyle'
-import { bangkokOutlineRing, getDistrictFeature, mockDistrictBoundaries, mockSubDistrictBoundaries } from '../../mock/mapBoundaries'
-import { getAssessmentResult } from '../../mock/assessmentResults'
+import { getAccessibilityColor, getChoroplethStyle, getColoredHighlightStyle, getHighlightStyle } from '../../config/mapStyle'
+import {
+  bangkokOutlineRing,
+  getDistrictFeature,
+  getSubDistrictFeature,
+  mockDistrictBoundaries,
+  mockSubDistrictBoundaries,
+} from '../../mock/mapBoundaries'
+import { BANGKOK_AREA_ID, getAssessmentResult } from '../../mock/assessmentResults'
 import type { Year } from '../../mock/years'
 
 type AccessibilityChoroplethProps = {
@@ -13,6 +19,23 @@ type AccessibilityChoroplethProps = {
   subDistrictId: string
   year: Year
   className?: string
+  /**
+   * Extra per-area outlines in arbitrary colors, drawn above the base
+   * choropleth — for Compare's several selected areas (a district/
+   * sub-district id, or BANGKOK_AREA_ID for the whole city outline).
+   * Independent of districtId/subDistrictId's own single-highlight above;
+   * Compare passes districtId="all" to get the plain district-level
+   * background and just adds these.
+   */
+  highlights?: { id: string; color: string }[]
+}
+
+/** Bangkok isn't a polygon feature like a district/sub-district — this wraps its outline ring as one so it can share the same GeoJSON rendering path. */
+function resolveHighlightFeature(id: string): Feature<Polygon | MultiPolygon, { id: string }> | undefined {
+  if (id === BANGKOK_AREA_ID) {
+    return { type: 'Feature', properties: { id }, geometry: { type: 'Polygon', coordinates: [bangkokOutlineRing] } }
+  }
+  return getDistrictFeature(id) ?? getSubDistrictFeature(id)
 }
 
 function ringToLatLngs(ring: Position[]): LatLngTuple[] {
@@ -27,15 +50,15 @@ function getDistrictFitLatLngs(districtId: string): LatLngTuple[] {
 }
 
 /**
- * A small read-only choropleth for the Dashboard — reuses the Map page's
- * boundary data (mock/mapBoundaries.ts) and style tokens
- * (config/mapStyle.ts) rather than copying them, but is its own component
- * since its fill (by access_pct) and scope (districts, or one district's
- * sub-districts) are Dashboard-specific. Every layer is non-interactive:
- * interactive: false on the styles below, pointer-events: none on every
- * pane — the only interaction is zoom.
+ * A small read-only choropleth, shared by the Dashboard and Compare —
+ * reuses the Map page's boundary data (mock/mapBoundaries.ts) and style
+ * tokens (config/mapStyle.ts) rather than copying them, but is its own
+ * component since its fill (by access_pct) and scope (districts, or one
+ * district's sub-districts) aren't the main Map page's concern. Every layer
+ * is non-interactive: interactive: false on the styles below, pointer-events:
+ * none on every pane — the only interaction is zoom.
  */
-export function AccessibilityChoropleth({ districtId, subDistrictId, year, className = '' }: AccessibilityChoroplethProps) {
+export function AccessibilityChoropleth({ districtId, subDistrictId, year, className = '', highlights }: AccessibilityChoroplethProps) {
   const isWholeCity = districtId === 'all'
   const level: 'district' | 'sub-district' = isWholeCity ? 'district' : 'sub-district'
 
@@ -80,6 +103,12 @@ export function AccessibilityChoropleth({ districtId, subDistrictId, year, class
         </Pane>
         <Pane name="choropleth-highlight-pane" style={{ zIndex: 402, pointerEvents: 'none' }}>
           {highlightFeature && <GeoJSON key={highlightFeature.properties.id} data={highlightFeature} style={getHighlightStyle()} />}
+        </Pane>
+        <Pane name="choropleth-multi-highlight-pane" style={{ zIndex: 403, pointerEvents: 'none' }}>
+          {highlights?.map((highlight) => {
+            const feature = resolveHighlightFeature(highlight.id)
+            return feature && <GeoJSON key={highlight.id} data={feature} style={getColoredHighlightStyle(highlight.color)} />
+          })}
         </Pane>
         <FitBoundsOnChange latLngs={fitLatLngs} />
       </MapContainer>

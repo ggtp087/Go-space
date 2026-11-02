@@ -7,8 +7,9 @@ import { ProgressBar } from '../components/ui/ProgressBar'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
 import { YearSelect } from '../components/ui/YearSelect'
+import { AccessibilityChoropleth } from '../components/dashboard/AccessibilityChoropleth'
 import { DeltaBadge } from '../components/dashboard/DeltaBadge'
-import { TrendChart } from '../components/dashboard/TrendChart'
+import { TrendChart, type TrendSeries } from '../components/dashboard/TrendChart'
 import { computeNiceAxis } from '../components/dashboard/trendAxis'
 import { useLanguage } from '../i18n/LanguageContext'
 import type { Strings } from '../i18n/strings'
@@ -222,6 +223,25 @@ export function ComparePage() {
     [yearsShareSeries],
   )
 
+  // Overlaid per-area series for the "districts" mode trend card — every
+  // compared area's full 2017-2026 trajectory, in its own series color.
+  const comparisonAccessSeries: TrendSeries[] = useMemo(
+    () => comparisonAreas.map((a) => ({ points: getMetricSeries(a.id, 'access_pct'), color: a.color, label: displayName(a, t) })),
+    [comparisonAreas, t],
+  )
+  const comparisonShareSeries: TrendSeries[] = useMemo(
+    () => comparisonAreas.map((a) => ({ points: getMetricSeries(a.id, 'share_ops_pct'), color: a.color, label: displayName(a, t) })),
+    [comparisonAreas, t],
+  )
+  const comparisonShareAxis = useMemo(
+    () =>
+      computeNiceAxis(
+        comparisonShareSeries.flatMap((s) => s.points.map((point) => point.value)).filter((value): value is number => value !== null),
+      ),
+    [comparisonShareSeries],
+  )
+  const highlightEntries = useMemo(() => comparisonAreas.map((a) => ({ id: a.id, color: a.color })), [comparisonAreas])
+
   return (
     <div className="flex-1 overflow-auto p-10">
       <h1 className="text-2xl font-bold text-ink">{t.compare.title}</h1>
@@ -370,15 +390,27 @@ export function ComparePage() {
         </div>
       </Card>
 
-      {mode === 'years' && (
-        <Card className="mt-6" title={t.compare.lineChartTitle} note={t.common.sampleDataTag}>
-          <div className="grid gap-6 sm:grid-cols-2">
-            <div>
-              <p className="mb-1.5 text-[12.5px] font-semibold text-ink">{t.compare.metricAccessibility}</p>
-              <TrendChart points={yearsAccessSeries} selectedYears={selectedYears} yMax={100} yTicks={[0, 25, 50, 75, 100]} color="var(--color-green-600)" />
-            </div>
-            <div>
-              <p className="mb-1.5 text-[12.5px] font-semibold text-ink">{t.map.openSpaceShareLabel}</p>
+      <Card className="mt-6" title={t.compare.lineChartTitle} note={t.common.sampleDataTag}>
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div>
+            <p className="mb-1.5 text-[12.5px] font-semibold text-ink">{t.compare.metricAccessibility}</p>
+            {mode === 'districts' ? (
+              <TrendChart series={comparisonAccessSeries} selectedYears={[year]} yMax={100} yTicks={[0, 25, 50, 75, 100]} />
+            ) : (
+              <TrendChart
+                points={yearsAccessSeries}
+                selectedYears={selectedYears}
+                yMax={100}
+                yTicks={[0, 25, 50, 75, 100]}
+                color="var(--color-green-600)"
+              />
+            )}
+          </div>
+          <div>
+            <p className="mb-1.5 text-[12.5px] font-semibold text-ink">{t.map.openSpaceShareLabel}</p>
+            {mode === 'districts' ? (
+              <TrendChart series={comparisonShareSeries} selectedYears={[year]} yMax={comparisonShareAxis.max} yTicks={comparisonShareAxis.ticks} />
+            ) : (
               <TrendChart
                 points={yearsShareSeries}
                 selectedYears={selectedYears}
@@ -386,6 +418,29 @@ export function ComparePage() {
                 yTicks={yearsShareAxis.ticks}
                 color="var(--color-accent-600)"
               />
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {mode === 'districts' && (
+        <Card className="mt-6" title={t.compare.mapCardTitle} note={t.common.sampleDataTag}>
+          <div className="flex flex-wrap items-center gap-6">
+            <AccessibilityChoropleth
+              districtId="all"
+              subDistrictId="all"
+              year={year}
+              highlights={highlightEntries}
+              className="h-[260px] w-[260px] flex-none"
+            />
+            <div className="flex flex-col gap-1.5">
+              {comparisonAreas.map((a, index) => (
+                <span key={a.id} className="flex items-center gap-1.5 text-[12.5px] font-semibold text-slate">
+                  <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ background: a.color }} />
+                  {displayName(a, t)}
+                  {index === 0 && <span className="text-mist">({t.compare.referenceBadge})</span>}
+                </span>
+              ))}
             </div>
           </div>
         </Card>
@@ -399,10 +454,6 @@ export function ComparePage() {
               <h3 className="text-[15px] font-bold text-ink">{item.title}</h3>
             </div>
             <p className="mb-3 text-center text-xs text-slate">{item.subtitle}</p>
-
-            <div className="mb-3 flex h-[110px] items-center justify-center rounded-lg border border-dashed border-line-2 text-xs text-slate">
-              {t.map.mapPlaceholder}
-            </div>
 
             {!item.row ? (
               <div className="rounded-lg border border-dashed border-line-2 p-4 text-center">

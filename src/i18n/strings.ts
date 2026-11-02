@@ -152,6 +152,7 @@ export const en = {
     selectYearsLabel: 'Years to compare',
     selectYearsHint: 'Select 2–3 years',
     lineChartTitle: 'Trend, 2017–2026',
+    mapCardTitle: 'Selected areas',
   },
   auth: {
     login: {
@@ -315,5 +316,6 @@ export const th: DeepPartial<Strings> = {
     selectYearsLabel: 'ปีที่จะเปรียบเทียบ',
     selectYearsHint: 'เลือก 2–3 ปี',
     lineChartTitle: 'แนวโน้ม 2560–2569',
+    mapCardTitle: 'พื้นที่ที่เลือก',
   },
 }

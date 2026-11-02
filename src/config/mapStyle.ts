@@ -201,3 +201,8 @@ export function getAllServiceAreasStyle(): PathOptions {
 export function getHighlightStyle(): PathOptions {
   return { color: mapStyle.highlight.color, weight: mapStyle.highlight.weight, fill: false, interactive: false }
 }
+
+/** Same stroke-only outline as getHighlightStyle, but in a given series color — for Compare's multiple highlighted areas on one shared choropleth. */
+export function getColoredHighlightStyle(color: string): PathOptions {
+  return { color, weight: mapStyle.highlight.weight, fill: false, interactive: false }
+}
