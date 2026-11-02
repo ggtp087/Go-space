@@ -21,7 +21,6 @@ import type { Strings } from '../i18n/strings'
 import { useYear } from '../state/YearContext'
 import { useArea } from '../state/AreaContext'
 import { accessibilityColor, getAccessibilityBrackets, roundPct } from '../mock/areas'
-import type { KpiSample } from '../mock/kpis'
 import { availableYears, type Year } from '../mock/years'
 import {
   BANGKOK_AREA_ID,
@@ -37,51 +36,143 @@ import {
 
 const KPI_ICONS: Record<string, ReactNode> = {
   accessibility: (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 3a13 13 0 0 0 0 18a13 13 0 0 0 0-18z" />
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="4.5" r="2.1" />
+      <path d="M12 6.5v5" />
+      <path d="M12 11.5l-3.5 7" />
+      <path d="M12 11.5l3 7.5" />
+      <path d="M12 8l-3.5 2.5" />
+      <path d="M12 8l4 1.5" />
     </svg>
   ),
   covered: (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
       <circle cx="9" cy="8" r="3.2" />
       <path d="M3.5 20c0-3.5 2.8-6 5.5-6s5.5 2.5 5.5 6" />
+      <path d="M16 8.5l2 2 3.5-4" />
     </svg>
   ),
   notCovered: (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round">
-      <circle cx="12" cy="12" r="9" />
-      <line x1="6" y1="6" x2="18" y2="18" />
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.5 20c0-3.5 2.8-6 5.5-6s5.5 2.5 5.5 6" />
+      <path d="M16.5 6.5l4 4" />
+      <path d="M20.5 6.5l-4 4" />
     </svg>
   ),
   spaces: (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round">
-      <circle cx="12" cy="9" r="6" />
-      <line x1="12" y1="15" x2="12" y2="21" />
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8" r="4.5" />
+      <line x1="9" y1="12.5" x2="9" y2="20" />
+      <circle cx="16" cy="11" r="3.2" />
+      <line x1="16" y1="14.2" x2="16" y2="20" />
     </svg>
   ),
   opsShare: (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round">
-      <rect x="4" y="3" width="16" height="18" rx="1.5" />
-      <line x1="8" y1="8" x2="12" y2="8" />
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.2 15.9A10 10 0 1 1 8 2.8" />
+      <path d="M22 12A10 10 0 0 0 12 2v10z" />
     </svg>
   ),
 }
 
-/** The 5 KPI cards for one area/year — "citywide" only for Bangkok-wide, otherwise named after the focus area, so the wording always matches what's actually being shown. */
-function buildKpis(row: AreaRow, areaName: string, isWholeCity: boolean, t: Strings): KpiSample[] {
-  const scope = isWholeCity ? t.dashboard.kpi.scopeCitywide : t.dashboard.kpi.scopeInArea.replace('{area}', areaName)
+type KpiCardConfig = {
+  id: 'accessibility' | 'covered' | 'notCovered' | 'spaces' | 'opsShare'
+  value: string
+  heading: string
+  description: string
+  tone: 'green' | 'amber'
+  tag?: string
+}
+
+/** The 5 KPI cards for the current focus area/year — heading+description are now static per-id copy (no embedded scope; the scope is shown once above the grid instead), so building this is just picking the right value out of the row. */
+function buildKpis(row: AreaRow, t: Strings): KpiCardConfig[] {
   const totalPopulation = Math.round(row.total_population)
   const covered = Math.round(row.population_with_access)
   const notCovered = totalPopulation - covered
 
   return [
-    { id: 'accessibility', value: `${roundPct(row.access_pct)}%`, label: `${t.dashboard.kpi.accessibility}, ${scope}`, tone: 'green' },
-    { id: 'covered', value: covered.toLocaleString(), label: `${t.dashboard.kpi.covered}, ${scope}`, tone: 'green' },
-    { id: 'notCovered', value: notCovered.toLocaleString(), label: `${t.dashboard.kpi.notCovered}, ${scope}`, tone: 'amber' },
-    { id: 'spaces', value: totalOpsCount(row.ops_count).toLocaleString(), label: `${t.dashboard.kpi.spaces}, ${scope}`, tone: 'green' },
-    { id: 'opsShare', value: `${roundPct(row.share_ops_pct)}%`, label: `${t.dashboard.kpi.opsShare}, ${scope}`, tone: 'green' },
+    {
+      id: 'accessibility',
+      value: `${roundPct(row.access_pct)}%`,
+      heading: t.dashboard.kpi.accessibilityHeading,
+      description: t.dashboard.kpi.accessibilityDescription,
+      tone: 'green',
+      tag: t.dashboard.kpi.sdgTag,
+    },
+    {
+      id: 'covered',
+      value: covered.toLocaleString(),
+      heading: t.dashboard.kpi.coveredHeading,
+      description: t.dashboard.kpi.coveredDescription,
+      tone: 'green',
+    },
+    {
+      id: 'notCovered',
+      value: notCovered.toLocaleString(),
+      heading: t.dashboard.kpi.notCoveredHeading,
+      description: t.dashboard.kpi.notCoveredDescription,
+      tone: 'amber',
+    },
+    {
+      id: 'spaces',
+      value: totalOpsCount(row.ops_count).toLocaleString(),
+      heading: t.dashboard.kpi.spacesHeading,
+      description: t.dashboard.kpi.spacesDescription,
+      tone: 'green',
+    },
+    {
+      id: 'opsShare',
+      value: `${roundPct(row.share_ops_pct)}%`,
+      heading: t.dashboard.kpi.opsShareHeading,
+      description: t.dashboard.kpi.opsShareDescription,
+      tone: 'green',
+      tag: t.dashboard.kpi.sdgTag,
+    },
   ]
+}
+
+function round1(value: number): number {
+  return Math.round(value * 10) / 10
+}
+
+/**
+ * The KPI card footer: a colored arrow + "+N <unit> from <year>" sentence,
+ * reusing the DeltaBadge-established arrow/color convention but in the
+ * longer per-card phrasing Part 2 calls for (not DeltaBadge's own
+ * percentage-only sentence shapes). `invert` flips the up=green/down=orange
+ * convention for metrics where a decrease is the good direction (residents
+ * without access).
+ */
+function kpiDeltaFooter(
+  kind: 'pp' | 'people' | 'places',
+  current: number,
+  previous: number,
+  previousYear: Year,
+  invert: boolean,
+  t: Strings,
+  language: Language,
+): ReactNode {
+  const delta = kind === 'pp' ? round1(current - previous) : Math.round(current - previous)
+  const isUp = delta > (kind === 'pp' ? 0.05 : 0)
+  const isDown = delta < (kind === 'pp' ? -0.05 : 0)
+  const arrow = isUp ? '▲' : isDown ? '▼' : '–'
+  const isGood = arrow === '–' ? null : arrow === '▲' ? !invert : invert
+  const colorClass = isGood === null ? 'text-slate' : isGood ? 'font-semibold text-green-700' : 'font-semibold text-accent-600'
+
+  if (arrow === '–') {
+    return <span className={colorClass}>{t.dashboard.trend.noChange}</span>
+  }
+
+  const absText = kind === 'pp' ? String(Math.abs(delta)) : Math.abs(delta).toLocaleString()
+  const signedText = `${delta > 0 ? '+' : '−'}${absText}`
+  const template = kind === 'pp' ? t.dashboard.kpi.deltaPercentagePoints : kind === 'people' ? t.dashboard.kpi.deltaPeople : t.dashboard.kpi.deltaPlaces
+  const text = template.replace('{delta}', signedText).replace('{year}', formatYear(previousYear, language))
+  return (
+    <span className={colorClass}>
+      {arrow} {text}
+    </span>
+  )
 }
 
 type TrendSummary = {
@@ -249,37 +340,33 @@ export function DashboardPage() {
     () => computeTrendYAxis(trendShareSeries.map((point) => point.value)),
     [trendShareSeries],
   )
-  const kpis = focusRow ? buildKpis(focusRow, focusMeta?.name ?? '', isWholeCity, t) : []
+  const kpis = focusRow ? buildKpis(focusRow, t) : []
+  const scopeAreaName = isWholeCity ? t.map.bangkokLabel : (focusMeta?.name ?? '')
+  const scopeHeading = t.dashboard.kpi.scopeHeading.replace('{area}', scopeAreaName).replace('{year}', formatYear(year, language))
 
-  function kpiExtra(kpiId: string): ReactNode {
-    if (!focusRow || !previousFocusRow) return undefined
-    if (kpiId === 'accessibility') {
-      return (
-        <DeltaBadge
-          currentValue={focusRow.access_pct}
-          compareValue={previousFocusRow.access_pct}
-          kind="vsPreviousYear"
-          compareYear={previousYear}
-          compact
-          t={t}
-          language={language}
-        />
-      )
+  function kpiFooter(kpiId: KpiCardConfig['id']): ReactNode {
+    if (!focusRow) return undefined
+    if (!hasPreviousYear || !previousFocusRow) return <span className="text-slate">{t.dashboard.trend.firstYearOfData}</span>
+    switch (kpiId) {
+      case 'accessibility':
+        return kpiDeltaFooter('pp', focusRow.access_pct, previousFocusRow.access_pct, previousYear, false, t, language)
+      case 'opsShare':
+        return kpiDeltaFooter('pp', focusRow.share_ops_pct, previousFocusRow.share_ops_pct, previousYear, false, t, language)
+      case 'covered':
+        return kpiDeltaFooter('people', focusRow.population_with_access, previousFocusRow.population_with_access, previousYear, false, t, language)
+      case 'notCovered':
+        return kpiDeltaFooter(
+          'people',
+          focusRow.total_population - focusRow.population_with_access,
+          previousFocusRow.total_population - previousFocusRow.population_with_access,
+          previousYear,
+          true,
+          t,
+          language,
+        )
+      case 'spaces':
+        return kpiDeltaFooter('places', totalOpsCount(focusRow.ops_count), totalOpsCount(previousFocusRow.ops_count), previousYear, false, t, language)
     }
-    if (kpiId === 'opsShare') {
-      return (
-        <DeltaBadge
-          currentValue={focusRow.share_ops_pct}
-          compareValue={previousFocusRow.share_ops_pct}
-          kind="vsPreviousYear"
-          compareYear={previousYear}
-          compact
-          t={t}
-          language={language}
-        />
-      )
-    }
-    return undefined
   }
 
   function unitSuffix(count: number): string {
@@ -443,9 +530,19 @@ export function DashboardPage() {
       ) : (
         <>
           <h2 className="mb-3 text-[15px] font-bold text-ink">{t.dashboard.sections.overview}</h2>
+          <p className="mb-3 text-[13px] font-semibold text-slate">{scopeHeading}</p>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
             {kpis.map((kpi) => (
-              <KpiCard key={kpi.id} icon={KPI_ICONS[kpi.id]} value={kpi.value} label={kpi.label} tone={kpi.tone} extra={kpiExtra(kpi.id)} />
+              <KpiCard
+                key={kpi.id}
+                icon={KPI_ICONS[kpi.id]}
+                heading={kpi.heading}
+                value={kpi.value}
+                description={kpi.description}
+                tone={kpi.tone}
+                tag={kpi.tag}
+                footer={kpiFooter(kpi.id)}
+              />
             ))}
           </div>
           <p className="mb-10 mt-2 text-[11px] text-mist">{t.dashboard.populationFootnote}</p>

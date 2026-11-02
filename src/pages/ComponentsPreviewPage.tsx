@@ -237,7 +237,7 @@ export function ComponentsPreviewPage() {
         <Section title="KpiCard">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
             {getKpisForYear(previewYear).map((kpi) => (
-              <KpiCard key={kpi.id} icon={KPI_ICONS[kpi.id]} value={kpi.value} label={kpi.label} tone={kpi.tone} />
+              <KpiCard key={kpi.id} icon={KPI_ICONS[kpi.id]} value={kpi.value} heading={kpi.label} description="" tone={kpi.tone} />
             ))}
           </div>
         </Section>
