@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { GeoJSON, MapContainer, Pane, ScaleControl, TileLayer, useMapEvents } from 'react-leaflet'
-import { circleMarker } from 'leaflet'
+import { GeoJSON, MapContainer, Marker, Pane, ScaleControl, TileLayer, useMapEvents } from 'react-leaflet'
+import { circleMarker, divIcon } from 'leaflet'
 import type { FitBoundsOptions, LatLng, LatLngBoundsExpression, LatLngTuple, Map as LeafletMap, PathOptions } from 'leaflet'
-import type { Feature, GeometryObject, MultiPolygon, Point, Position } from 'geojson'
+import type { Feature, FeatureCollection, GeometryObject, MultiPolygon, Point, Position } from 'geojson'
 import 'leaflet/dist/leaflet.css'
 import {
   getAllServiceAreasStyle,
   getDistrictFillOnlyStyle,
   getDistrictOutlineStyle,
-  getHighlightStyle,
   getNetworkStyle,
   getOpsPointStyle,
   getOpsTypeColor,
+  getSelectionHaloStyle,
+  getSelectionStyle,
   getServiceAreaStyle,
   getSubDistrictHaloStyle,
   getSubDistrictStyle,
@@ -19,7 +20,13 @@ import {
   zoomPadding,
 } from '../config/mapStyle'
 import { getMapData, getOpsAnalysis, type Bbox, type OpsAnalysis } from '../mock/mapData'
-import { bangkokBoundaryPositions, getDistrictFeature, getSubDistrictFeature } from '../mock/mapBoundaries'
+import {
+  bangkokBoundaryPositions,
+  getDistrictFeature,
+  getSubDistrictFeature,
+  multiPolygonBounds,
+  multiPolygonCentroid,
+} from '../mock/mapBoundaries'
 import type { OpsPointProperties } from '../mock/opsPoints'
 import { opsTypeFilterValues, opsTypeValues, type OpsTypeFilter } from '../config/opsTypes'
 import { Chip } from '../components/ui/Chip'
@@ -207,6 +214,14 @@ export function MapPage() {
     if (districtId !== 'all') return getDistrictFeature(districtId)
     return undefined
   }, [districtId, subDistrictId])
+
+  // When a sub-district is selected, its parent district's own (normal navy,
+  // not red) outline is always shown too — regardless of the district-
+  // boundaries toggle — so both levels stay legible at once.
+  const highlightParentDistrictFeature = useMemo(
+    () => (subDistrictId !== 'all' ? getDistrictFeature(districtId) : undefined),
+    [districtId, subDistrictId],
+  )
 
   // One place for "which park, and are we just previewing it or zoomed into
   // its service area" — savedView is only ever set going into 'zoomed' and
@@ -441,6 +456,9 @@ export function MapPage() {
   if (isZoomedIn && selectedOpsAnalysis && analysisVisibility.network) {
     legendRows.push({ id: 'network', label: t.map.networkLegendLabel, swatch: <StyleSwatch style={getNetworkStyle()} /> })
   }
+  if (highlightFeature) {
+    legendRows.push({ id: 'selected-area', label: t.map.selectedAreaLegendLabel, swatch: <StyleSwatch style={getSelectionStyle()} /> })
+  }
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -594,7 +612,15 @@ export function MapPage() {
             </Pane>
 
             <Pane name="highlight-pane" style={{ zIndex: 406, pointerEvents: 'none' }}>
-              {highlightFeature && <GeoJSON key={highlightFeature.properties.id} data={highlightFeature} style={getHighlightStyle()} />}
+              {highlightParentDistrictFeature && (
+                <GeoJSON key={`parent-${highlightParentDistrictFeature.properties.id}`} data={highlightParentDistrictFeature} style={getDistrictOutlineStyle()} />
+              )}
+              {highlightFeature && (
+                <>
+                  <GeoJSON key={`${highlightFeature.properties.id}-halo`} data={highlightFeature} style={getSelectionHaloStyle()} />
+                  <GeoJSON key={highlightFeature.properties.id} data={highlightFeature} style={getSelectionStyle()} />
+                </>
+              )}
             </Pane>
 
             <Pane name="ops-pane" style={{ zIndex: 407 }}>
@@ -622,6 +648,20 @@ export function MapPage() {
                   }}
                 />
               )}
+            </Pane>
+
+            {/* Drawn above even ops-pane so a label is never hidden under a
+                fill or line — harmless to its interactivity, since every
+                label here has pointer-events: none and doesn't intercept
+                clicks meant for the OPS points beneath it. */}
+            <Pane name="labels-pane" style={{ zIndex: 408, pointerEvents: 'none' }}>
+              <AreaLabels
+                districts={mapData.districts}
+                subDistricts={mapData.subDistricts}
+                showDistricts={layerState['district-boundaries']}
+                showSubDistricts={layerState['subdistrict-boundaries']}
+                language={language}
+              />
             </Pane>
 
             <ScaleControl position="bottomright" imperial={false} />
@@ -792,6 +832,103 @@ export function MapPage() {
         </div>
       </SidePanel>
     </div>
+  )
+}
+
+// Below this on-screen footprint (px, in either dimension), an area reads as
+// a sliver too small to plausibly carry a text label without just adding
+// clutter — its label is skipped rather than drawn cramped or overlapping
+// its neighbors. A cheap, deterministic stand-in for real label-collision
+// layout: it doesn't prevent every overlap between adjacent labels, but it
+// removes the worst of it (the many tiny sub-districts near the city center,
+// exactly where labels would otherwise be most packed together).
+const MIN_LABEL_FOOTPRINT_PX = 26
+
+function escapeLabelText(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function labelIcon(text: string, tier: 'district' | 'sub-district') {
+  const fontSize = tier === 'district' ? 11.5 : 10
+  const fontWeight = tier === 'district' ? 700 : 600
+  const color = tier === 'district' ? '#1F3A5F' : '#44403C'
+  // The halo is a stack of white text-shadows rather than a background box —
+  // keeps the label's own shape (no rectangle) while staying readable over
+  // the cream GIS fill, OSM tiles, or satellite imagery alike.
+  const halo = '-1px -1px 1.5px #fff,1px -1px 1.5px #fff,-1px 1px 1.5px #fff,1px 1px 1.5px #fff,0 0 3px #fff'
+  const html = `<span style="display:inline-block;transform:translate(-50%,-50%);white-space:nowrap;font-family:inherit;font-size:${fontSize}px;font-weight:${fontWeight};color:${color};text-shadow:${halo};">${escapeLabelText(text)}</span>`
+  return divIcon({ html, className: '' })
+}
+
+/**
+ * District/sub-district name labels — district names from zoom 11, sub-
+ * district names from zoom 13 (each only while its own boundary layer is
+ * toggled on), in the current UI language, non-interactive so they never
+ * intercept a click meant for the map beneath them. Recomputed only on
+ * zoomend/moveend (not every drag frame), since each check projects a
+ * feature's bounding box into screen space.
+ */
+function AreaLabels({
+  districts,
+  subDistricts,
+  showDistricts,
+  showSubDistricts,
+  language,
+}: {
+  districts: FeatureCollection<MultiPolygon, { id: string; name: string; name_th: string }>
+  subDistricts: FeatureCollection<MultiPolygon, { id: string; name: string; name_th: string; district_id: string }>
+  showDistricts: boolean
+  showSubDistricts: boolean
+  language: Language
+}) {
+  // The state value itself is never read — forcing a re-render on
+  // zoomend/moveend is all that's needed, since the filtering below reads
+  // the map's current zoom/projection directly on every render.
+  const [, forceRecompute] = useState(0)
+  const map = useMapEvents({
+    zoomend: () => forceRecompute((v) => v + 1),
+    moveend: () => forceRecompute((v) => v + 1),
+  })
+
+  const zoom = map.getZoom()
+  const districtsVisible = showDistricts && zoom >= 11
+  const subDistrictsVisible = showSubDistricts && zoom >= 13
+  if (!districtsVisible && !subDistrictsVisible) return null
+
+  function fitsOnScreen(feature: Feature<MultiPolygon>): boolean {
+    const bounds = multiPolygonBounds(feature.geometry.coordinates)
+    const topLeft = map.latLngToContainerPoint([bounds.maxLat, bounds.minLon])
+    const bottomRight = map.latLngToContainerPoint([bounds.minLat, bounds.maxLon])
+    return Math.abs(bottomRight.x - topLeft.x) >= MIN_LABEL_FOOTPRINT_PX && Math.abs(bottomRight.y - topLeft.y) >= MIN_LABEL_FOOTPRINT_PX
+  }
+
+  return (
+    <>
+      {districtsVisible &&
+        districts.features.filter(fitsOnScreen).map((feature) => {
+          const [lon, lat] = multiPolygonCentroid(feature.geometry.coordinates)
+          return (
+            <Marker
+              key={feature.properties.id}
+              position={[lat, lon]}
+              interactive={false}
+              icon={labelIcon(localizedName(feature.properties.name, feature.properties.name_th, language), 'district')}
+            />
+          )
+        })}
+      {subDistrictsVisible &&
+        subDistricts.features.filter(fitsOnScreen).map((feature) => {
+          const [lon, lat] = multiPolygonCentroid(feature.geometry.coordinates)
+          return (
+            <Marker
+              key={feature.properties.id}
+              position={[lat, lon]}
+              interactive={false}
+              icon={labelIcon(localizedName(feature.properties.name, feature.properties.name_th, language), 'sub-district')}
+            />
+          )
+        })}
+    </>
   )
 }
 

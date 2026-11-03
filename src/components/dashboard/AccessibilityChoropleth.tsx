@@ -3,7 +3,7 @@ import { GeoJSON, MapContainer, Pane, useMap } from 'react-leaflet'
 import type { LatLngTuple } from 'leaflet'
 import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon, Position } from 'geojson'
 import 'leaflet/dist/leaflet.css'
-import { getAccessibilityColor, getChoroplethStyle, getColoredHighlightStyle, getHighlightStyle } from '../../config/mapStyle'
+import { getAccessibilityColor, getChoroplethSelectionStyle, getChoroplethStyle, getColoredHighlightStyle } from '../../config/mapStyle'
 import {
   bangkokBoundaryPositions,
   bangkokOutline,
@@ -39,15 +39,15 @@ function resolveHighlightFeature(id: string): Feature<Polygon | MultiPolygon, { 
   return getDistrictFeature(id) ?? getSubDistrictFeature(id)
 }
 
-function ringToLatLngs(ring: Position[]): LatLngTuple[] {
-  return ring.map(([lon, lat]) => [lat, lon] as LatLngTuple)
+function positionsToLatLngs(positions: Position[]): LatLngTuple[] {
+  return positions.map(([lon, lat]) => [lat, lon] as LatLngTuple)
 }
 
 function getDistrictFitLatLngs(districtId: string): LatLngTuple[] {
-  if (districtId === 'all') return ringToLatLngs(bangkokBoundaryPositions)
+  if (districtId === 'all') return positionsToLatLngs(bangkokBoundaryPositions)
   const feature = getDistrictFeature(districtId)
-  if (!feature) return ringToLatLngs(bangkokBoundaryPositions)
-  return feature.geometry.coordinates.flatMap((polygon) => ringToLatLngs(polygon[0]))
+  if (!feature) return positionsToLatLngs(bangkokBoundaryPositions)
+  return feature.geometry.coordinates.flatMap((polygon) => positionsToLatLngs(polygon[0]))
 }
 
 /**
@@ -103,7 +103,7 @@ export function AccessibilityChoropleth({ districtId, subDistrictId, year, class
           <GeoJSON key={`${level}-${districtId}`} data={areaFeatureCollection} style={areaStyle} />
         </Pane>
         <Pane name="choropleth-highlight-pane" style={{ zIndex: 402, pointerEvents: 'none' }}>
-          {highlightFeature && <GeoJSON key={highlightFeature.properties.id} data={highlightFeature} style={getHighlightStyle()} />}
+          {highlightFeature && <GeoJSON key={highlightFeature.properties.id} data={highlightFeature} style={getChoroplethSelectionStyle()} />}
         </Pane>
         <Pane name="choropleth-multi-highlight-pane" style={{ zIndex: 403, pointerEvents: 'none' }}>
           {highlights?.map((highlight) => {

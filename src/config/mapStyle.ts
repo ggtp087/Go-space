@@ -63,16 +63,26 @@ export const mapStyle = {
     weight: 1.5,
   },
   network: {
-    // Reads clearly over both the golden GIS fills and the green service area.
-    color: '#E11D48',
+    // Dark gray rather than red — the only other red on the map is the
+    // area-selection outline below, and a selected park's network showing
+    // at the same time as a selected area must never read as "two reds".
+    color: '#374151',
     weight: 3,
   },
   // Selected district/sub-district boundary — drawn regardless of the
   // district/sub-district boundary toggles, so picking an area always shows
-  // where it is.
-  highlight: {
-    color: '#1F3A5F',
-    weight: 4,
+  // where it is. Red (not navy) so a selection is unmistakable from the
+  // map's own ordinary boundary lines; the halo is a thin white line drawn
+  // just underneath the red stroke so it reads clearly on the cream GIS
+  // fill as well as over OSM/Satellite imagery of any brightness.
+  selection: {
+    color: '#DC2626',
+    weight: 3.5,
+    fillColor: '#DC2626',
+    fillOpacity: 0.06,
+    haloColor: '#FFFFFF',
+    haloWeight: 6,
+    haloOpacity: 0.8,
   },
 }
 
@@ -240,11 +250,29 @@ export function getAllServiceAreasStyle(): PathOptions {
   }
 }
 
-export function getHighlightStyle(): PathOptions {
-  return { color: mapStyle.highlight.color, weight: mapStyle.highlight.weight, fill: false, interactive: false }
+/** The thin white line drawn just underneath getSelectionStyle's red, so the red selection outline stays visible on the cream GIS fill and over OSM/Satellite imagery of any brightness. */
+export function getSelectionHaloStyle(): PathOptions {
+  return { color: mapStyle.selection.haloColor, weight: mapStyle.selection.haloWeight, opacity: mapStyle.selection.haloOpacity, fill: false, interactive: false }
 }
 
-/** Same stroke-only outline as getHighlightStyle, but in a given series color — for Compare's multiple highlighted areas on one shared choropleth. */
+/** The currently-selected district/sub-district on the main Map — red outline plus a very light red fill, so the selected area reads as selected even where its boundary runs off-screen. */
+export function getSelectionStyle(): PathOptions {
+  return {
+    color: mapStyle.selection.color,
+    weight: mapStyle.selection.weight,
+    fillColor: mapStyle.selection.fillColor,
+    fillOpacity: mapStyle.selection.fillOpacity,
+    fill: true,
+    interactive: false,
+  }
+}
+
+/** Same red as getSelectionStyle, but outline-only — for the Dashboard choropleth, where the area's own accessibility color must stay the fill. */
+export function getChoroplethSelectionStyle(): PathOptions {
+  return { color: mapStyle.selection.color, weight: mapStyle.selection.weight, fill: false, interactive: false }
+}
+
+/** Stroke-only outline in a given series color — for Compare's multiple highlighted areas on one shared choropleth. Independent of the red selection weight above: Compare's own highlight styling is unchanged. */
 export function getColoredHighlightStyle(color: string): PathOptions {
-  return { color, weight: mapStyle.highlight.weight, fill: false, interactive: false }
+  return { color, weight: 4, fill: false, interactive: false }
 }

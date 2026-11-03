@@ -76,6 +76,7 @@ export const en = {
     trendSectionTitle: 'Accessibility, 2017–2026',
     activeLayersLegendTitle: 'Legend',
     networkLegendLabel: 'Network within 400 m',
+    selectedAreaLegendLabel: 'Selected area',
     opsCard: {
       areaLabel: 'Area',
       openedLabel: 'Opened',
@@ -416,6 +417,7 @@ export const th: DeepPartial<Strings> = {
     trendSectionTitle: 'การเข้าถึง, 2560–2569',
     activeLayersLegendTitle: 'คำอธิบายสัญลักษณ์',
     networkLegendLabel: 'โครงข่ายถนนภายใน 400 เมตร',
+    selectedAreaLegendLabel: 'พื้นที่ที่เลือก',
     opsCard: {
       areaLabel: 'พื้นที่',
       openedLabel: 'เปิดให้บริการ',
