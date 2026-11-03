@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { GeoJSON, MapContainer, Marker, Pane, ScaleControl, TileLayer, useMapEvents } from 'react-leaflet'
 import { circleMarker, divIcon } from 'leaflet'
 import type { FitBoundsOptions, LatLng, LatLngBoundsExpression, LatLngTuple, Map as LeafletMap, PathOptions } from 'leaflet'
@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css'
 import {
   getAllServiceAreasStyle,
   getDistrictFillOnlyStyle,
+  getDistrictHaloStyle,
   getDistrictOutlineStyle,
   getNetworkStyle,
   getOpsPointStyle,
@@ -14,10 +15,10 @@ import {
   getSelectionHaloStyle,
   getSelectionStyle,
   getServiceAreaStyle,
-  getSubDistrictHaloStyle,
   getSubDistrictStyle,
   mapStyle,
   zoomPadding,
+  type BasemapKey,
 } from '../config/mapStyle'
 import { getMapData, getOpsAnalysis, type Bbox, type OpsAnalysis } from '../mock/mapData'
 import {
@@ -146,6 +147,11 @@ export function MapPage() {
   const isNarrowMapArea = mapAreaWidth > 0 && mapAreaWidth < NARROW_MAP_BREAKPOINT
 
   const isGisBasemap = basemap === 'gis'
+  // basemapOptions' own `value` is typed as a plain string (it's generic,
+  // reusable config); this is the one place that narrows it back to the
+  // literal union every basemap-keyed style lookup below expects.
+  const currentBasemap = basemap as BasemapKey
+  const districtHaloStyle = getDistrictHaloStyle(currentBasemap)
 
   const isWholeCity = districtId === 'all'
   const districtOptions = useMemo(
@@ -435,13 +441,18 @@ export function MapPage() {
       label: layerLabels[districtLayer.id],
       swatch: (
         <StyleSwatch
-          style={{
-            color: mapStyle.district.color,
-            weight: mapStyle.district.weight,
-            fill: isGisBasemap,
-            fillColor: mapStyle.district.fillColor,
-            fillOpacity: mapStyle.district.fillOpacity,
-          }}
+          background={mapStyle.swatchChipBackground[currentBasemap]}
+          style={
+            isGisBasemap
+              ? {
+                  color: mapStyle.district.color,
+                  weight: mapStyle.district.weight,
+                  fill: true,
+                  fillColor: mapStyle.district.fillColor,
+                  fillOpacity: mapStyle.district.fillOpacity,
+                }
+              : getDistrictOutlineStyle(currentBasemap)
+          }
         />
       ),
     })
@@ -450,14 +461,18 @@ export function MapPage() {
     legendRows.push({
       id: 'subdistrict-boundaries',
       label: layerLabels[subDistrictLayer.id],
-      swatch: <StyleSwatch style={getSubDistrictStyle(isGisBasemap)} />,
+      swatch: <StyleSwatch background={mapStyle.swatchChipBackground[currentBasemap]} style={getSubDistrictStyle(currentBasemap)} />,
     })
   }
   if (isZoomedIn && selectedOpsAnalysis && analysisVisibility.network) {
     legendRows.push({ id: 'network', label: t.map.networkLegendLabel, swatch: <StyleSwatch style={getNetworkStyle()} /> })
   }
   if (highlightFeature) {
-    legendRows.push({ id: 'selected-area', label: t.map.selectedAreaLegendLabel, swatch: <StyleSwatch style={getSelectionStyle()} /> })
+    legendRows.push({
+      id: 'selected-area',
+      label: t.map.selectedAreaLegendLabel,
+      swatch: <StyleSwatch background={mapStyle.swatchChipBackground[currentBasemap]} style={getSelectionStyle()} />,
+    })
   }
 
   return (
@@ -470,7 +485,7 @@ export function MapPage() {
             .map((layer) => (
               <div key={layer.id} className="flex items-center justify-between py-[7px]">
                 <span className="flex items-center gap-2.5 text-[13.5px] text-ink">
-                  <LayerSwatch layerId={layer.id} isGisBasemap={isGisBasemap} />
+                  <LayerSwatch layerId={layer.id} basemap={currentBasemap} />
                   {layerLabels[layer.id]}
                 </span>
                 <Toggle
@@ -544,6 +559,10 @@ export function MapPage() {
             touchZoom
             preferCanvas
             className={isGisBasemap ? 'h-full w-full bg-white' : 'h-full w-full'}
+            // Read by the .leaflet-tile-pane rule in index.css — keeps the
+            // actual filter values here with the rest of the basemap tokens
+            // instead of hand-picked numbers in a CSS file.
+            style={{ '--map-tile-filter': mapStyle.tileFilter[currentBasemap] } as CSSProperties}
           >
             {/* key forces a clean remount on basemap change, so the tile URL and attribution always swap together. */}
             {activeBasemap.tileUrl && (
@@ -571,11 +590,8 @@ export function MapPage() {
                 pointer-events is what actually makes the click fall through
                 to the pane below at the browser level. */}
             <Pane name="subdistrict-pane" style={{ zIndex: 401, pointerEvents: 'none' }}>
-              {layerState['subdistrict-boundaries'] && !isGisBasemap && (
-                <GeoJSON data={mapData.subDistricts} style={getSubDistrictHaloStyle()} />
-              )}
               {layerState['subdistrict-boundaries'] && (
-                <GeoJSON data={mapData.subDistricts} style={getSubDistrictStyle(isGisBasemap)} />
+                <GeoJSON data={mapData.subDistricts} style={getSubDistrictStyle(currentBasemap)} />
               )}
               {isGisBasemap && layerState['district-boundaries'] && !layerState['subdistrict-boundaries'] && (
                 <GeoJSON data={mapData.districts} style={getDistrictFillOnlyStyle()} />
@@ -602,7 +618,8 @@ export function MapPage() {
             </Pane>
 
             <Pane name="district-pane" style={{ zIndex: 404, pointerEvents: 'none' }}>
-              {layerState['district-boundaries'] && <GeoJSON data={mapData.districts} style={getDistrictOutlineStyle()} />}
+              {layerState['district-boundaries'] && districtHaloStyle && <GeoJSON data={mapData.districts} style={districtHaloStyle} />}
+              {layerState['district-boundaries'] && <GeoJSON data={mapData.districts} style={getDistrictOutlineStyle(currentBasemap)} />}
             </Pane>
 
             <Pane name="network-pane" style={{ zIndex: 405, pointerEvents: 'none' }}>
@@ -612,8 +629,15 @@ export function MapPage() {
             </Pane>
 
             <Pane name="highlight-pane" style={{ zIndex: 406, pointerEvents: 'none' }}>
+              {highlightParentDistrictFeature && districtHaloStyle && (
+                <GeoJSON key={`parent-halo-${highlightParentDistrictFeature.properties.id}`} data={highlightParentDistrictFeature} style={districtHaloStyle} />
+              )}
               {highlightParentDistrictFeature && (
-                <GeoJSON key={`parent-${highlightParentDistrictFeature.properties.id}`} data={highlightParentDistrictFeature} style={getDistrictOutlineStyle()} />
+                <GeoJSON
+                  key={`parent-${highlightParentDistrictFeature.properties.id}`}
+                  data={highlightParentDistrictFeature}
+                  style={getDistrictOutlineStyle(currentBasemap)}
+                />
               )}
               {highlightFeature && (
                 <>
@@ -661,6 +685,7 @@ export function MapPage() {
                 showDistricts={layerState['district-boundaries']}
                 showSubDistricts={layerState['subdistrict-boundaries']}
                 language={language}
+                basemap={currentBasemap}
               />
             </Pane>
 
@@ -677,9 +702,9 @@ export function MapPage() {
           {/* Basemap switcher and zoom controls share this top-left stack so
               the top-right corner stays free for the docked analysis card. */}
           <div className="pointer-events-auto absolute left-5 top-5 flex flex-col items-start gap-2">
-            <SegmentedControl value={basemap} onChange={setBasemap} options={basemapSegmentOptions} className="w-auto shadow-card" />
+            <SegmentedControl value={basemap} onChange={setBasemap} options={basemapSegmentOptions} className="w-auto select-none shadow-card" />
 
-            <div className="flex flex-col overflow-hidden rounded-[9px] border border-line bg-white shadow-card">
+            <div className="flex select-none flex-col overflow-hidden rounded-[9px] border border-line bg-white shadow-card">
               <button
                 type="button"
                 aria-label={t.common.zoomIn}
@@ -701,7 +726,7 @@ export function MapPage() {
               type="button"
               aria-label={t.common.resetView}
               onClick={handleResetView}
-              className="flex h-9 w-9 items-center justify-center rounded-[9px] border border-line bg-white text-ink shadow-card"
+              className="flex h-9 w-9 select-none items-center justify-center rounded-[9px] border border-line bg-white text-ink shadow-card"
             >
               <FitIcon />
             </button>
@@ -837,36 +862,53 @@ export function MapPage() {
 
 // Below this on-screen footprint (px, in either dimension), an area reads as
 // a sliver too small to plausibly carry a text label without just adding
-// clutter — its label is skipped rather than drawn cramped or overlapping
-// its neighbors. A cheap, deterministic stand-in for real label-collision
-// layout: it doesn't prevent every overlap between adjacent labels, but it
-// removes the worst of it (the many tiny sub-districts near the city center,
-// exactly where labels would otherwise be most packed together).
+// clutter — its label is dropped before collision placement even considers it.
 const MIN_LABEL_FOOTPRINT_PX = 26
 
 function escapeLabelText(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-function labelIcon(text: string, tier: 'district' | 'sub-district') {
+function labelIcon(text: string, tier: 'district' | 'sub-district', basemap: BasemapKey) {
   const fontSize = tier === 'district' ? 11.5 : 10
   const fontWeight = tier === 'district' ? 700 : 600
-  const color = tier === 'district' ? '#1F3A5F' : '#44403C'
-  // The halo is a stack of white text-shadows rather than a background box —
-  // keeps the label's own shape (no rectangle) while staying readable over
-  // the cream GIS fill, OSM tiles, or satellite imagery alike.
-  const halo = '-1px -1px 1.5px #fff,1px -1px 1.5px #fff,-1px 1px 1.5px #fff,1px 1px 1.5px #fff,0 0 3px #fff'
+  const colors = mapStyle.labelByBasemap[basemap]
+  const color = tier === 'district' ? colors.district : colors.subDistrict
+  // The halo is a stack of text-shadows in the basemap's halo color rather
+  // than a background box — keeps the label's own shape (no rectangle)
+  // while staying readable: white-on-dark-shadow over the cream GIS fill
+  // and OSM tiles, white-on-navy-shadow over Satellite imagery.
+  const halo = [-1, 1].flatMap((dx) => [-1, 1].map((dy) => `${dx}px ${dy}px 1.5px ${colors.haloColor}`)).join(',') + `,0 0 3px ${colors.haloColor}`
   const html = `<span style="display:inline-block;transform:translate(-50%,-50%);white-space:nowrap;font-family:inherit;font-size:${fontSize}px;font-weight:${fontWeight};color:${color};text-shadow:${halo};">${escapeLabelText(text)}</span>`
   return divIcon({ html, className: '' })
 }
+
+/** A deliberately rough text-width estimate (no DOM measurement) — good enough for a greedy collision check, not pixel-perfect layout. */
+function estimateLabelBox(text: string, fontSize: number): { width: number; height: number } {
+  return { width: text.length * fontSize * 0.62 + 6, height: fontSize * 1.5 }
+}
+
+type LabelBox = { x: number; y: number; width: number; height: number }
+
+function labelBoxesOverlap(a: LabelBox, b: LabelBox): boolean {
+  return Math.abs(a.x - b.x) * 2 < a.width + b.width && Math.abs(a.y - b.y) * 2 < a.height + b.height
+}
+
+type AreaFeature = Feature<MultiPolygon, { id: string; name: string; name_th: string; area_sqm: number }>
+type LabelCandidate = { feature: AreaFeature; tier: 'district' | 'sub-district' }
 
 /**
  * District/sub-district name labels — district names from zoom 11, sub-
  * district names from zoom 13 (each only while its own boundary layer is
  * toggled on), in the current UI language, non-interactive so they never
- * intercept a click meant for the map beneath them. Recomputed only on
- * zoomend/moveend (not every drag frame), since each check projects a
- * feature's bounding box into screen space.
+ * intercept a click meant for the map beneath them, colored for the current
+ * basemap. Overlapping labels are resolved with a simple greedy placement:
+ * every visible candidate is sorted by its area_sqm (largest first), then
+ * placed only if its estimated text box doesn't overlap one already placed
+ * — so a bigger area's name always wins a conflict, and previously-skipped
+ * labels reappear once zooming in gives them (and their neighbors) more
+ * screen space. Recomputed only on zoomend/moveend (not every drag frame),
+ * since each candidate is projected into screen space to check it.
  */
 function AreaLabels({
   districts,
@@ -874,15 +916,17 @@ function AreaLabels({
   showDistricts,
   showSubDistricts,
   language,
+  basemap,
 }: {
-  districts: FeatureCollection<MultiPolygon, { id: string; name: string; name_th: string }>
-  subDistricts: FeatureCollection<MultiPolygon, { id: string; name: string; name_th: string; district_id: string }>
+  districts: FeatureCollection<MultiPolygon, { id: string; name: string; name_th: string; area_sqm: number }>
+  subDistricts: FeatureCollection<MultiPolygon, { id: string; name: string; name_th: string; district_id: string; area_sqm: number }>
   showDistricts: boolean
   showSubDistricts: boolean
   language: Language
+  basemap: BasemapKey
 }) {
   // The state value itself is never read — forcing a re-render on
-  // zoomend/moveend is all that's needed, since the filtering below reads
+  // zoomend/moveend is all that's needed, since the placement below reads
   // the map's current zoom/projection directly on every render.
   const [, forceRecompute] = useState(0)
   const map = useMapEvents({
@@ -895,41 +939,32 @@ function AreaLabels({
   const subDistrictsVisible = showSubDistricts && zoom >= 13
   if (!districtsVisible && !subDistrictsVisible) return null
 
-  function fitsOnScreen(feature: Feature<MultiPolygon>): boolean {
+  function fitsOnScreen(feature: AreaFeature): boolean {
     const bounds = multiPolygonBounds(feature.geometry.coordinates)
     const topLeft = map.latLngToContainerPoint([bounds.maxLat, bounds.minLon])
     const bottomRight = map.latLngToContainerPoint([bounds.minLat, bounds.maxLon])
     return Math.abs(bottomRight.x - topLeft.x) >= MIN_LABEL_FOOTPRINT_PX && Math.abs(bottomRight.y - topLeft.y) >= MIN_LABEL_FOOTPRINT_PX
   }
 
-  return (
-    <>
-      {districtsVisible &&
-        districts.features.filter(fitsOnScreen).map((feature) => {
-          const [lon, lat] = multiPolygonCentroid(feature.geometry.coordinates)
-          return (
-            <Marker
-              key={feature.properties.id}
-              position={[lat, lon]}
-              interactive={false}
-              icon={labelIcon(localizedName(feature.properties.name, feature.properties.name_th, language), 'district')}
-            />
-          )
-        })}
-      {subDistrictsVisible &&
-        subDistricts.features.filter(fitsOnScreen).map((feature) => {
-          const [lon, lat] = multiPolygonCentroid(feature.geometry.coordinates)
-          return (
-            <Marker
-              key={feature.properties.id}
-              position={[lat, lon]}
-              interactive={false}
-              icon={labelIcon(localizedName(feature.properties.name, feature.properties.name_th, language), 'sub-district')}
-            />
-          )
-        })}
-    </>
-  )
+  const candidates: LabelCandidate[] = [
+    ...(districtsVisible ? districts.features.filter(fitsOnScreen).map((feature) => ({ feature, tier: 'district' as const })) : []),
+    ...(subDistrictsVisible ? subDistricts.features.filter(fitsOnScreen).map((feature) => ({ feature, tier: 'sub-district' as const })) : []),
+  ].sort((a, b) => b.feature.properties.area_sqm - a.feature.properties.area_sqm)
+
+  const placedBoxes: LabelBox[] = []
+  const markers = []
+  for (const { feature, tier } of candidates) {
+    const [lon, lat] = multiPolygonCentroid(feature.geometry.coordinates)
+    const point = map.latLngToContainerPoint([lat, lon])
+    const name = localizedName(feature.properties.name, feature.properties.name_th, language)
+    const { width, height } = estimateLabelBox(name, tier === 'district' ? 11.5 : 10)
+    const box: LabelBox = { x: point.x, y: point.y, width, height }
+    if (placedBoxes.some((placed) => labelBoxesOverlap(placed, box))) continue
+    placedBoxes.push(box)
+    markers.push(<Marker key={feature.properties.id} position={[lat, lon]} interactive={false} icon={labelIcon(name, tier, basemap)} />)
+  }
+
+  return <>{markers}</>
 }
 
 /**
@@ -1123,15 +1158,18 @@ function CloseIcon() {
  * Renders a Leaflet PathOptions object as a small swatch — border from
  * color/weight/dashArray, fill from fillColor/fillOpacity — so it can never
  * drift from what's actually drawn on the map (no hand-picked hex here).
+ * `background`, when given, sits behind the swatch — without it, a white or
+ * light-gray outline-only swatch (OSM/Satellite's district/sub-district
+ * lines) can disappear against the sidebar/legend's own white background.
  */
-function StyleSwatch({ style }: { style: PathOptions }) {
+function StyleSwatch({ style, background }: { style: PathOptions; background?: string }) {
   const weight = typeof style.weight === 'number' ? style.weight : 1
   const borderWidth = Math.max(1, Math.round(weight))
   const hasFill = style.fill !== false && Boolean(style.fillColor)
   return (
     <span
       className="relative h-3 w-3 flex-none overflow-hidden rounded-[3px]"
-      style={{ border: `${borderWidth}px ${style.dashArray ? 'dashed' : 'solid'} ${style.color ?? 'transparent'}` }}
+      style={{ background, border: `${borderWidth}px ${style.dashArray ? 'dashed' : 'solid'} ${style.color ?? 'transparent'}` }}
     >
       {hasFill && (
         <span className="absolute inset-0" style={{ background: style.fillColor as string, opacity: (style.fillOpacity as number) ?? 1 }} />
@@ -1151,30 +1189,31 @@ function OpsTypeSwatch() {
   )
 }
 
-/** Resolves the right swatch for a sidebar layer id — district/sub-district read mapStyle directly so GIS vs. OSM/Satellite (filled vs. outline-only) always matches what's drawn. */
-function LayerSwatch({ layerId, isGisBasemap }: { layerId: string; isGisBasemap: boolean }) {
+/** Resolves the right swatch for a sidebar layer id — district/sub-district read mapStyle directly so each basemap's own stroke color/fill always matches what's drawn, on a background chip that matches the current basemap so a white or light-gray line is never invisible. */
+function LayerSwatch({ layerId, basemap }: { layerId: string; basemap: BasemapKey }) {
   if (layerId === 'open-spaces') return <OpsTypeSwatch />
   if (layerId === 'service-areas') return <StyleSwatch style={getAllServiceAreasStyle()} />
-  if (layerId === 'subdistrict-boundaries') return <StyleSwatch style={getSubDistrictStyle(isGisBasemap)} />
+  const chipBackground = mapStyle.swatchChipBackground[basemap]
+  if (layerId === 'subdistrict-boundaries') return <StyleSwatch background={chipBackground} style={getSubDistrictStyle(basemap)} />
   if (layerId === 'district-boundaries') {
-    return (
-      <StyleSwatch
-        style={{
-          color: mapStyle.district.color,
-          weight: mapStyle.district.weight,
-          fill: isGisBasemap,
-          fillColor: mapStyle.district.fillColor,
-          fillOpacity: mapStyle.district.fillOpacity,
-        }}
-      />
-    )
+    const style =
+      basemap === 'gis'
+        ? {
+            color: mapStyle.district.color,
+            weight: mapStyle.district.weight,
+            fill: true,
+            fillColor: mapStyle.district.fillColor,
+            fillOpacity: mapStyle.district.fillOpacity,
+          }
+        : getDistrictOutlineStyle(basemap)
+    return <StyleSwatch background={chipBackground} style={style} />
   }
   return null
 }
 
 function MapLegendCard({ title, rows }: { title: string; rows: { id: string; label: string; swatch: ReactNode }[] }) {
   return (
-    <div className="w-[220px] rounded-xl border border-line bg-card p-[14px_16px] shadow-card">
+    <div className="w-[220px] select-none rounded-xl border border-line bg-card p-[14px_16px] shadow-card">
       <p className="mb-2 text-xs font-bold text-ink">{title}</p>
       <div className="flex flex-col gap-[7px]">
         {rows.map((row) => (

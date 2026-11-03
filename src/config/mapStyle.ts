@@ -1,37 +1,77 @@
 import type { CircleMarkerOptions, PathOptions } from 'leaflet'
 import type { OpsType } from './opsTypes'
 
-// Single source of truth for the map's GIS-mode rendering — colors and
-// weights only, so these can be tweaked without touching MapPage's
-// rendering logic.
+export type BasemapKey = 'gis' | 'osm' | 'satellite'
+
+// Single source of truth for the map's rendering — colors and weights only,
+// so these can be tweaked without touching MapPage's rendering logic.
 export const mapStyle = {
+  // GIS mode's own look: a plain cream fill with a light neutral dashed
+  // sub-district stroke under a heavier solid navy district one. Fixed
+  // (not basemap-keyed) since GIS mode never changes.
   subDistrict: {
     fillColor: '#F4EFE3',
     fillOpacity: 1,
-    // GIS mode: a light neutral stroke, dashed, so it reads as the finer
-    // "inner" boundary against the heavier solid district line.
     color: '#A8A29E',
     weight: 0.8,
     dashArray: '3 3',
-    // OSM/Satellite: no fill there, so the stroke needs to read on its own
-    // over imagery of any brightness — white, with a dark halo drawn just
-    // underneath it (getSubDistrictHaloStyle) rather than relying on
-    // opacity alone, so it stays visible over both light and dark patches.
-    outlineColor: '#FFFFFF',
-    outlineWeight: 1,
-    haloColor: '#1F3A5F',
-    haloWeight: 3,
-    haloOpacity: 0.55,
   },
   district: {
-    // A darker, heavier navy stroke than sub-district's, on every basemap —
-    // reads as the outer boundary regardless of GIS fill vs. OSM/Satellite
-    // outline-only rendering.
     fillColor: '#F4EFE3',
     fillOpacity: 1,
     color: '#1F3A5F',
     weight: 2.5,
   },
+  // OSM and Satellite have no flat fill to read a boundary against — each
+  // needs its own stroke color/weight tuned for its own imagery, keyed by
+  // basemap so MapPage never hand-picks a color inline. GIS isn't listed
+  // here; it always uses the plain `subDistrict`/`district` tokens above.
+  boundariesByBasemap: {
+    osm: {
+      district: { color: '#1F3A5F', weight: 2, opacity: 0.9 },
+      // Gray, not white — white reads as invisible against OSM's own
+      // pale-gray/white road and building tiles.
+      subDistrict: { color: '#6B7280', weight: 0.8, dashArray: '3 3', opacity: 1 },
+    },
+    satellite: {
+      // White pops against imagery, but needs a dark halo underneath (see
+      // districtHalo below) to stay legible over equally-light pixels
+      // (concrete, sand, bright rooftops).
+      district: { color: '#FFFFFF', weight: 2, opacity: 1 },
+      subDistrict: { color: '#FFFFFF', weight: 0.8, dashArray: '3 3', opacity: 0.7 },
+    },
+  },
+  // Only the satellite district line gets a halo — OSM's navy already reads
+  // clearly against road-map tiles, and neither basemap's sub-district line
+  // asked for one.
+  districtHalo: {
+    satellite: { color: '#111827', weight: 4, opacity: 0.5 },
+  },
+  // CSS `filter` applied to the tile pane only (never the vector layers
+  // above it) — toned down enough that our boundaries/points/labels read as
+  // the foreground, without losing the basemap's own legibility.
+  tileFilter: {
+    gis: 'none',
+    osm: 'grayscale(0.7) brightness(1.05) contrast(0.9)',
+    satellite: 'brightness(0.85)',
+  } satisfies Record<BasemapKey, string>,
+  // Area-name label text color + halo, keyed by basemap — satellite gets
+  // white text with a dark halo (navy-on-white-halo would vanish over dark
+  // imagery); GIS and OSM share the navy-on-white-halo pair since both have
+  // a light background to read against.
+  labelByBasemap: {
+    gis: { district: '#1F3A5F', subDistrict: '#44403C', haloColor: '#FFFFFF' },
+    osm: { district: '#1F3A5F', subDistrict: '#44403C', haloColor: '#FFFFFF' },
+    satellite: { district: '#FFFFFF', subDistrict: '#F3F4F6', haloColor: '#111827' },
+  } satisfies Record<BasemapKey, { district: string; subDistrict: string; haloColor: string }>,
+  // The small background chip a sidebar/legend boundary swatch sits on,
+  // keyed by basemap — without it, a white (Satellite) or light-gray (OSM)
+  // swatch line can vanish against the sidebar/legend's own white card.
+  swatchChipBackground: {
+    gis: '#F4EFE3',
+    osm: '#E5E7EB',
+    satellite: '#1F2937',
+  } satisfies Record<BasemapKey, string>,
   opsPoint: {
     radius: 6,
     color: '#333333',
@@ -154,48 +194,47 @@ export const zoomPadding = {
 }
 
 /**
- * Sub-district boundary style. `filled` is true only in GIS mode — in
- * OSM/Satellite mode boundaries are always outline-only so the basemap
- * tiles stay visible underneath.
+ * Sub-district boundary style, tuned per basemap (see mapStyle.
+ * boundariesByBasemap) — GIS fills with its own cream/gray pair; OSM and
+ * Satellite are always outline-only so the basemap tiles stay visible
+ * underneath, each in whichever color actually reads against that imagery.
  */
-export function getSubDistrictStyle(filled: boolean): PathOptions {
-  if (!filled) {
-    return { color: mapStyle.subDistrict.outlineColor, weight: mapStyle.subDistrict.outlineWeight, fill: false, interactive: false }
+export function getSubDistrictStyle(basemap: BasemapKey): PathOptions {
+  if (basemap === 'gis') {
+    return {
+      color: mapStyle.subDistrict.color,
+      weight: mapStyle.subDistrict.weight,
+      dashArray: mapStyle.subDistrict.dashArray,
+      fillColor: mapStyle.subDistrict.fillColor,
+      fillOpacity: mapStyle.subDistrict.fillOpacity,
+      fill: true,
+      interactive: false,
+    }
   }
-  return {
-    color: mapStyle.subDistrict.color,
-    weight: mapStyle.subDistrict.weight,
-    dashArray: mapStyle.subDistrict.dashArray,
-    fillColor: mapStyle.subDistrict.fillColor,
-    fillOpacity: mapStyle.subDistrict.fillOpacity,
-    fill: true,
-    interactive: false,
-  }
+  const tokens = mapStyle.boundariesByBasemap[basemap].subDistrict
+  return { color: tokens.color, weight: tokens.weight, dashArray: tokens.dashArray, opacity: tokens.opacity, fill: false, interactive: false }
 }
 
 /**
- * The dark outline drawn just underneath the white sub-district stroke in
- * OSM/Satellite mode (getSubDistrictStyle(false)) — a halo rather than
- * relying on opacity alone, so a thin white line stays visible over
- * imagery of any brightness. Not used in GIS mode, where the sub-district
- * stroke already reads clearly against the flat fill.
+ * The district boundary line itself, tuned per basemap — GIS and OSM read
+ * clearly on their own; Satellite's white line gets a halo
+ * (getDistrictHaloStyle) drawn just underneath it since bright imagery can
+ * otherwise swallow a plain white stroke. Sits above the service-area/
+ * network analysis layers, per the stated bottom-to-top order.
  */
-export function getSubDistrictHaloStyle(): PathOptions {
-  return {
-    color: mapStyle.subDistrict.haloColor,
-    weight: mapStyle.subDistrict.haloWeight,
-    opacity: mapStyle.subDistrict.haloOpacity,
-    fill: false,
-    interactive: false,
+export function getDistrictOutlineStyle(basemap: BasemapKey): PathOptions {
+  if (basemap === 'gis') {
+    return { color: mapStyle.district.color, weight: mapStyle.district.weight, fill: false, interactive: false }
   }
+  const tokens = mapStyle.boundariesByBasemap[basemap].district
+  return { color: tokens.color, weight: tokens.weight, opacity: tokens.opacity, fill: false, interactive: false }
 }
 
-/**
- * The district boundary line itself — always stroke-only. Sits above the
- * service-area/network analysis layers, per the stated bottom-to-top order.
- */
-export function getDistrictOutlineStyle(): PathOptions {
-  return { color: mapStyle.district.color, weight: mapStyle.district.weight, fill: false, interactive: false }
+/** The dark halo drawn just underneath the white Satellite district line — null on GIS/OSM, which don't use one. */
+export function getDistrictHaloStyle(basemap: BasemapKey): PathOptions | null {
+  if (basemap !== 'satellite') return null
+  const halo = mapStyle.districtHalo.satellite
+  return { color: halo.color, weight: halo.weight, opacity: halo.opacity, fill: false, interactive: false }
 }
 
 /**

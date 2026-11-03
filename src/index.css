@@ -50,3 +50,18 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
 }
+
+/* Map basemap tile tone-down (values set per-basemap in config/mapStyle.ts
+   via the --map-tile-filter custom property on the Leaflet container) — the
+   filter itself has to live here since it targets Leaflet's own tile pane,
+   which isn't reachable through a React style prop. */
+.leaflet-tile-pane {
+  filter: var(--map-tile-filter, none);
+}
+
+/* Leaflet's own scale-bar control has no React prop surface to add a
+   className to, so this is the only way to stop a double-click on it from
+   highlighting its text. */
+.leaflet-control-scale {
+  user-select: none;
+}
