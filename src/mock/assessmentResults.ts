@@ -1,6 +1,7 @@
 import type { AreaLevel } from './areas'
 import { clamp, deterministicNoise, localizedName } from './areas'
-import { mockDistrictBoundaries, mockSubDistrictBoundaries, ringAreaSqm } from './mapBoundaries'
+import { densityWeight, distanceFromCenterKm } from './density'
+import { mockDistrictBoundaries, mockSubDistrictBoundaries, multiPolygonCentroid } from './mapBoundaries'
 import { mockOpsPoints } from './opsPoints'
 import { comparisonPalette } from '../config/mapStyle'
 import { opsTypeValues, type OpsType } from '../config/opsTypes'
@@ -125,18 +126,44 @@ function countOpsByType(subdistrictId: string, year: Year): Record<OpsType, numb
   return counts
 }
 
+const TARGET_CITY_POPULATION = 5_500_000
+
+/**
+ * Each sub-district's 2026 population anchor, shaped by real geography
+ * rather than uniform per-sub-district noise: density falls off with
+ * distance from the city center (mock/density.ts — the same curve
+ * opsPoints.ts weights its point placement by), times the sub-district's
+ * own real area, plus a small ±15% deterministic wobble so same-distance
+ * areas aren't identical. Every sub-district's raw figure is then scaled by
+ * one shared factor so the citywide total lands exactly on
+ * TARGET_CITY_POPULATION — the scaling preserves the dense-core/sparse-edge
+ * shape, it just fixes the overall magnitude.
+ */
+function buildPopulationAnchors(): Map<string, number> {
+  const raw = mockSubDistrictBoundaries.features.map((feature) => {
+    const centroid = multiPolygonCentroid(feature.geometry.coordinates)
+    const distanceKm = distanceFromCenterKm(centroid)
+    const wobble = 0.85 + noise01(feature.properties.id, 'pop') * 0.3
+    const populationDensityPerSqKm = densityWeight(distanceKm) * wobble
+    return { id: feature.properties.id, population: populationDensityPerSqKm * (feature.properties.area_sqm / 1_000_000) }
+  })
+  const rawTotal = raw.reduce((sum, entry) => sum + entry.population, 0)
+  const scale = TARGET_CITY_POPULATION / rawTotal
+  return new Map(raw.map((entry) => [entry.id, entry.population * scale]))
+}
+
+const populationAnchorById = buildPopulationAnchors()
+
 function buildAssessmentResults(): AssessmentResult[] {
   const rows: AssessmentResult[] = []
 
   for (const feature of mockSubDistrictBoundaries.features) {
     const id = feature.properties.id
-    const totalAreaSqm = ringAreaSqm(feature.geometry.coordinates[0])
+    const totalAreaSqm = feature.properties.area_sqm
     const trend = nextTrend()
     const accessAnchorPct = clamp(15 + noise01(id, 'acc') * 80, 1, 98)
     const shareAnchorPct = clamp(2 + noise01(id, 'ops') * 13, 0.5, 20)
-    // Averages ~110k/sub-district across the 48 sub-districts, landing the
-    // citywide total near Bangkok's real registered population (~5.5M).
-    const populationAnchor = 40_000 + noise01(id, 'pop') * 140_000
+    const populationAnchor = populationAnchorById.get(id)!
 
     for (const year of availableYears) {
       const accessPct = trendPct(trend, accessAnchorPct, `${id}-acc`, year)
@@ -328,6 +355,20 @@ export const defaultComparisonAreas: ComparisonArea[] = buildDefaultComparisonAr
 // --- Dev-only roll-up validation -----------------------------------------------
 
 if (import.meta.env.DEV) validateRollups()
+if (import.meta.env.DEV) logDensitySanityCheck()
+
+/** Dev-only sanity log: the 5 densest and 5 sparsest sub-districts by people/km² at the anchor year — lets a human confirm the density-by-distance model actually produced a dense-core/sparse-edge pattern rather than just moving noise around. */
+function logDensitySanityCheck(): void {
+  const rows = mockSubDistrictBoundaries.features.map((feature) => {
+    const result = getSubDistrictAssessmentResult(feature.properties.id, ANCHOR_YEAR)!
+    const densityPerSqKm = result.total_population / (result.total_area_sqm / 1_000_000)
+    return { id: feature.properties.id, name: feature.properties.name, densityPerSqKm }
+  })
+  const sorted = [...rows].sort((a, b) => b.densityPerSqKm - a.densityPerSqKm)
+  const fmt = (r: (typeof rows)[number]) => `${r.id} ${r.name}: ${Math.round(r.densityPerSqKm).toLocaleString()} /km²`
+  console.info('[density-check] densest 5:\n' + sorted.slice(0, 5).map(fmt).join('\n'))
+  console.info('[density-check] sparsest 5:\n' + sorted.slice(-5).reverse().map(fmt).join('\n'))
+}
 
 function approxEqual(a: number, b: number, epsilon = 1e-6): boolean {
   return Math.abs(a - b) <= epsilon * Math.max(1, Math.abs(a), Math.abs(b))

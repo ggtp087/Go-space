@@ -5,7 +5,8 @@ import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon, Posit
 import 'leaflet/dist/leaflet.css'
 import { getAccessibilityColor, getChoroplethStyle, getColoredHighlightStyle, getHighlightStyle } from '../../config/mapStyle'
 import {
-  bangkokOutlineRing,
+  bangkokBoundaryPositions,
+  bangkokOutline,
   getDistrictFeature,
   getSubDistrictFeature,
   mockDistrictBoundaries,
@@ -30,10 +31,10 @@ type AccessibilityChoroplethProps = {
   highlights?: { id: string; color: string }[]
 }
 
-/** Bangkok isn't a polygon feature like a district/sub-district — this wraps its outline ring as one so it can share the same GeoJSON rendering path. */
+/** Bangkok isn't a polygon feature like a district/sub-district — this wraps its outline as one so it can share the same GeoJSON rendering path. */
 function resolveHighlightFeature(id: string): Feature<Polygon | MultiPolygon, { id: string }> | undefined {
   if (id === BANGKOK_AREA_ID) {
-    return { type: 'Feature', properties: { id }, geometry: { type: 'Polygon', coordinates: [bangkokOutlineRing] } }
+    return { type: 'Feature', properties: { id }, geometry: bangkokOutline }
   }
   return getDistrictFeature(id) ?? getSubDistrictFeature(id)
 }
@@ -43,9 +44,9 @@ function ringToLatLngs(ring: Position[]): LatLngTuple[] {
 }
 
 function getDistrictFitLatLngs(districtId: string): LatLngTuple[] {
-  if (districtId === 'all') return ringToLatLngs(bangkokOutlineRing)
+  if (districtId === 'all') return ringToLatLngs(bangkokBoundaryPositions)
   const feature = getDistrictFeature(districtId)
-  if (!feature) return ringToLatLngs(bangkokOutlineRing)
+  if (!feature) return ringToLatLngs(bangkokBoundaryPositions)
   return feature.geometry.coordinates.flatMap((polygon) => ringToLatLngs(polygon[0]))
 }
 

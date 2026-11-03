@@ -19,7 +19,7 @@ import {
   zoomPadding,
 } from '../config/mapStyle'
 import { getMapData, getOpsAnalysis, type Bbox, type OpsAnalysis } from '../mock/mapData'
-import { bangkokOutlineRing, getDistrictFeature, getSubDistrictFeature } from '../mock/mapBoundaries'
+import { bangkokBoundaryPositions, getDistrictFeature, getSubDistrictFeature } from '../mock/mapBoundaries'
 import type { OpsPointProperties } from '../mock/opsPoints'
 import { opsTypeFilterValues, opsTypeValues, type OpsTypeFilter } from '../config/opsTypes'
 import { Chip } from '../components/ui/Chip'
@@ -84,18 +84,18 @@ function ringToLatLngs(ring: Position[]): LatLngTuple[] {
 
 /** The ring to fit the map to for the current district/sub-district selection — the sub-district if one's picked, else the district, else the whole Bangkok outline. */
 function getAreaFitLatLngs(districtId: string, subDistrictId: string): LatLngTuple[] {
+  // District and sub-district geometry are both MultiPolygon — flatten every
+  // member polygon's outer ring, since fitBounds just needs the full set of
+  // boundary points to compute its bounding box from.
   if (subDistrictId !== 'all') {
     const feature = getSubDistrictFeature(subDistrictId)
-    if (feature) return ringToLatLngs(feature.geometry.coordinates[0])
+    if (feature) return feature.geometry.coordinates.flatMap((polygon) => ringToLatLngs(polygon[0]))
   }
   if (districtId !== 'all') {
     const feature = getDistrictFeature(districtId)
-    // District geometry is a MultiPolygon (the union of its sub-districts) —
-    // flatten every member polygon's outer ring, since fitBounds just needs
-    // the full set of boundary points to compute its bounding box from.
     if (feature) return feature.geometry.coordinates.flatMap((polygon) => ringToLatLngs(polygon[0]))
   }
-  return ringToLatLngs(bangkokOutlineRing)
+  return ringToLatLngs(bangkokBoundaryPositions)
 }
 
 type SavedView = { center: LatLng; zoom: number }
