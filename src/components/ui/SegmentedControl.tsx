@@ -11,9 +11,11 @@ type SegmentedControlProps = {
   value: string
   onChange: (value: string) => void
   className?: string
+  /** Each button sizes to its own label (and never wraps) instead of stretching to share equal width — for a control whose options have very different label lengths, e.g. the map's basemap switcher ("GIS" vs. "Street map"), where equal-width stretching was squeezing the two-word option onto two lines. */
+  fitContent?: boolean
 }
 
-export function SegmentedControl({ options, value, onChange, className = '' }: SegmentedControlProps) {
+export function SegmentedControl({ options, value, onChange, className = '', fitContent = false }: SegmentedControlProps) {
   return (
     <div className={`flex rounded-lg border border-line bg-bg p-0.5 ${className}`}>
       {options.map((option) => {
@@ -26,7 +28,7 @@ export function SegmentedControl({ options, value, onChange, className = '' }: S
             aria-pressed={isActive}
             disabled={option.disabled}
             title={option.title}
-            className={`flex-1 rounded-md px-3.5 py-[7px] text-[12.5px] font-semibold transition-colors ${
+            className={`${fitContent ? 'flex-none whitespace-nowrap' : 'flex-1'} rounded-md px-3.5 py-[7px] text-[12.5px] font-semibold transition-colors ${
               option.disabled
                 ? 'cursor-not-allowed text-mist-2'
                 : isActive

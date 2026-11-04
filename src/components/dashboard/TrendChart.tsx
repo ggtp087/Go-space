@@ -33,10 +33,33 @@ type TrendChartProps = {
   axisNote?: string
   /** Converts every displayed year (axis labels, tooltips) to Buddhist Era in Thai mode — defaults to English/CE. */
   language?: Language
+  /**
+   * Colors each year-to-year line segment by its own direction (up/down/no
+   * change) instead of a single series color — Dashboard's accessibility
+   * and OPS share trend charts only; Compare's multi-series overlay never
+   * sets this, so it keeps each area's own series color.
+   */
+  colorBySegmentDirection?: boolean
+  /** Shown under the chart only when colorBySegmentDirection is on, e.g. "green = up, red = down". */
+  directionNote?: string
 }
 
 const MARGIN = { top: 30, right: 14, bottom: 22, left: 40 }
 const DEFAULT_COLOR = 'var(--color-green-600)'
+// Not the app's own green-600/accent design tokens — this up/down/flat
+// pairing is its own semantic, unrelated to the accessibility/brand palette.
+const DIRECTION_COLORS = { up: '#16A34A', down: '#DC2626', flat: '#9CA3AF' }
+// Matches DeltaBarChart's own up/down threshold, so the two charts never
+// disagree about whether a given year-over-year move counts as "no change".
+const NO_CHANGE_THRESHOLD = 0.05
+const NEUTRAL_POINT_COLOR = 'var(--color-ink)'
+
+function directionColor(from: number, to: number): string {
+  const delta = to - from
+  if (delta > NO_CHANGE_THRESHOLD) return DIRECTION_COLORS.up
+  if (delta < -NO_CHANGE_THRESHOLD) return DIRECTION_COLORS.down
+  return DIRECTION_COLORS.flat
+}
 
 type SeriesCoord = { year: Year; x: number; y: number | null; value: number | null }
 
@@ -62,6 +85,8 @@ export function TrendChart({
   noDataLabel = 'No data',
   axisNote,
   language = 'en',
+  colorBySegmentDirection = false,
+  directionNote,
 }: TrendChartProps) {
   const { ref, width } = useChartWidth(600)
   const resolvedSeries: TrendSeries[] = series ?? (points ? [{ points, color: color ?? DEFAULT_COLOR }] : [])
@@ -145,6 +170,8 @@ export function TrendChart({
               ))}
 
               {seriesCoords.map((s, sIndex) => {
+                const pointColor = colorBySegmentDirection ? NEUTRAL_POINT_COLOR : s.color
+
                 const segments: { x: number; y: number }[][] = []
                 let current: { x: number; y: number }[] = []
                 for (const c of s.coords) {
@@ -157,19 +184,37 @@ export function TrendChart({
                 }
                 if (current.length) segments.push(current)
 
+                // One two-point line per year-to-year gap (not the grouped
+                // polylines above), each colored by its own direction —
+                // only ever on, so there's no need to also handle gaps from
+                // a null value here (segments above already do).
+                const directionSegments: { x1: number; y1: number; x2: number; y2: number; color: string }[] = []
+                if (colorBySegmentDirection) {
+                  for (let i = 0; i < s.coords.length - 1; i++) {
+                    const a = s.coords[i]
+                    const b = s.coords[i + 1]
+                    if (a.value === null || b.value === null || a.y === null || b.y === null) continue
+                    directionSegments.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, color: directionColor(a.value, b.value) })
+                  }
+                }
+
                 return (
                   <g key={sIndex}>
-                    {segments.map((segment, segIndex) => (
-                      <polyline
-                        key={segIndex}
-                        points={segment.map((p) => `${p.x},${p.y}`).join(' ')}
-                        fill="none"
-                        stroke={s.color}
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    ))}
+                    {colorBySegmentDirection
+                      ? directionSegments.map((seg, segIndex) => (
+                          <line key={segIndex} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} stroke={seg.color} strokeWidth={2} strokeLinecap="round" />
+                        ))
+                      : segments.map((segment, segIndex) => (
+                          <polyline
+                            key={segIndex}
+                            points={segment.map((p) => `${p.x},${p.y}`).join(' ')}
+                            fill="none"
+                            stroke={s.color}
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        ))}
                     {s.coords.map((c) =>
                       c.value === null || c.y === null ? (
                         <circle key={c.year} cx={c.x} cy={height - MARGIN.bottom} r={2} fill="var(--color-mist-2)">
@@ -180,7 +225,7 @@ export function TrendChart({
                           )}
                         </circle>
                       ) : selectedYears.includes(c.year) ? (
-                        <circle key={c.year} cx={c.x} cy={c.y} r={isMultiSeries ? 4 : 4.5} fill="#fff" stroke={s.color} strokeWidth={2.5}>
+                        <circle key={c.year} cx={c.x} cy={c.y} r={isMultiSeries ? 4 : 4.5} fill="#fff" stroke={pointColor} strokeWidth={2.5}>
                           {!isMultiSeries && (
                             <title>
                               {formatYear(c.year, language)}: {formatValue(c.value)}
@@ -189,7 +234,7 @@ export function TrendChart({
                           )}
                         </circle>
                       ) : (
-                        <circle key={c.year} cx={c.x} cy={c.y} r={2.5} fill={s.color} opacity={0.55}>
+                        <circle key={c.year} cx={c.x} cy={c.y} r={2.5} fill={pointColor} opacity={0.55}>
                           {!isMultiSeries && (
                             <title>
                               {formatYear(c.year, language)}: {formatValue(c.value)}
@@ -220,7 +265,7 @@ export function TrendChart({
                       textAnchor={c.x < 60 ? 'start' : c.x > width - 60 ? 'end' : 'middle'}
                       fontSize={isSelected ? 13 : 12}
                       fontWeight={isSelected ? 700 : 600}
-                      fill={isSelected ? seriesCoords[0].color : 'var(--color-slate)'}
+                      fill={isSelected ? (colorBySegmentDirection ? NEUTRAL_POINT_COLOR : seriesCoords[0].color) : 'var(--color-slate)'}
                       opacity={isSelected ? 1 : 0.85}
                     >
                       {formatValue(c.value)}
@@ -257,6 +302,7 @@ export function TrendChart({
         </svg>
       </div>
       {axisNote && yMin > 0 && <p className="mt-1 text-[10px] text-mist">{axisNote}</p>}
+      {colorBySegmentDirection && directionNote && <p className="mt-1 text-[10px] text-mist">{directionNote}</p>}
     </div>
   )
 }

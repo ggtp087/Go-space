@@ -73,24 +73,39 @@ export const mapStyle = {
     satellite: '#1F2937',
   } satisfies Record<BasemapKey, string>,
   opsPoint: {
-    radius: 6,
-    color: '#333333',
-    weight: 0.5,
+    // A dark outline on every point (not just selected ones) — the only
+    // way yellow and orange stay readable as discrete dots against the
+    // cream GIS fill, OSM tiles, and Satellite imagery alike.
+    color: '#1F2937',
+    weight: 1,
     fillOpacity: 1,
-    // Chosen to stay distinct from each other and from the GIS gold fill,
-    // the green service-area overlay, and the red network line, on GIS,
-    // OSM, and Satellite basemaps alike.
+    // Four clearly different tones — no two similar shades. Checked
+    // public_park's green against the service-area fill (#2E7D5B, 15–25%
+    // opacity, config.serviceArea below): different enough in hue (that
+    // fill leans teal, this is a plain leaf green) plus the shape/opacity
+    // difference (an opaque outlined dot vs. a diffuse translucent area)
+    // that the two don't read as the same color in practice. Avoids red
+    // (the selection color) and navy (the district boundary color).
     colorsByType: {
-      open_space: '#2563EB',
-      public_park: '#16A34A',
-      park_15min: '#EA580C',
-      sports_ground: '#7C3AED',
+      public_park: '#2E9E44',
+      park_15min: '#E6B800',
+      open_space: '#F28E2B',
+      sports_ground: '#9333EA',
     } satisfies Record<OpsType, string>,
-    // Applied to whichever point is currently selected, on top of its own
-    // ops_type fill color.
-    selectedRadius: 9,
-    selectedColor: '#111111',
-    selectedWeight: 2.5,
+    // Bubble radius scales with the point's own area_sqm (sqrt, so AREA —
+    // not radius — is proportional to the real area), clamped so a handful
+    // of outliers can't blow the scale out for everything else. Floor is
+    // 5, not a literal 4, so the smallest points still keep a workable
+    // click target (Leaflet's canvas circleMarker hit area is its own
+    // drawn radius — there's no separate hit-tolerance to pad it with).
+    minRadius: 5,
+    maxRadius: 18,
+    minAreaSqm: 1_000,
+    maxAreaSqm: 60_000,
+    // Applied to whichever point is currently selected — a thicker, darker
+    // ring on top of its own radius/fill, not a size change.
+    selectedColor: '#111827',
+    selectedWeight: 3,
   },
   serviceArea: {
     fillColor: '#2E7D5B',
@@ -127,10 +142,13 @@ export const mapStyle = {
 }
 
 // Categorical palette for "which area is this" series (Compare's chips,
-// bars, and later lines/outlines) — deliberately outside the green→orange
-// hues of accessibilityScale below, so a series color is never mistaken for
-// an accessibility class.
-export const comparisonPalette = ['#2563EB', '#7C3AED', '#DB2777', '#0891B2']
+// bars, and later lines/outlines) — up to 5 areas, each a clearly distinct
+// tone. Deliberately outside the green→orange hues of accessibilityScale
+// below (so a series color is never mistaken for an accessibility class)
+// and outside red (the map's selection color) — the 5th color is a neutral
+// slate rather than another saturated hue, since every other spot on the
+// wheel not already used risked reading as a dim version of one of the four.
+export const comparisonPalette = ['#2563EB', '#7C3AED', '#DB2777', '#0891B2', '#475569']
 
 // The one source for the 5-step accessibility color scale — the Dashboard's
 // choropleth/brackets/ranking, mock/areas.ts's accessibilityColor(), and the
@@ -248,9 +266,17 @@ export function getDistrictFillOnlyStyle(): PathOptions {
   return { fillColor: mapStyle.district.fillColor, fillOpacity: mapStyle.district.fillOpacity, fill: true, stroke: false, interactive: false }
 }
 
-export function getOpsPointStyle(opsType: OpsType, selected = false): CircleMarkerOptions {
+/** Sqrt-scaled bubble radius from a point's real area_sqm, clamped to the configured min/max — area (not radius) reads as proportional to the real size. */
+export function getOpsPointRadius(areaSqm: number): number {
+  const { minRadius, maxRadius, minAreaSqm, maxAreaSqm } = mapStyle.opsPoint
+  const clamped = Math.min(maxAreaSqm, Math.max(minAreaSqm, areaSqm))
+  const t = Math.sqrt((clamped - minAreaSqm) / (maxAreaSqm - minAreaSqm))
+  return minRadius + t * (maxRadius - minRadius)
+}
+
+export function getOpsPointStyle(opsType: OpsType, areaSqm: number, selected = false): CircleMarkerOptions {
   return {
-    radius: selected ? mapStyle.opsPoint.selectedRadius : mapStyle.opsPoint.radius,
+    radius: getOpsPointRadius(areaSqm),
     color: selected ? mapStyle.opsPoint.selectedColor : mapStyle.opsPoint.color,
     weight: selected ? mapStyle.opsPoint.selectedWeight : mapStyle.opsPoint.weight,
     fillOpacity: mapStyle.opsPoint.fillOpacity,

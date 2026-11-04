@@ -10,6 +10,7 @@ import {
   getDistrictHaloStyle,
   getDistrictOutlineStyle,
   getNetworkStyle,
+  getOpsPointRadius,
   getOpsPointStyle,
   getOpsTypeColor,
   getSelectionHaloStyle,
@@ -41,6 +42,7 @@ import { TrendLine } from '../components/ui/TrendLine'
 import { YearSelect } from '../components/ui/YearSelect'
 import { Button } from '../components/ui/Button'
 import { formatYear } from '../i18n/formatYear'
+import { formatAreaSqKm, formatAreaSqm } from '../i18n/formatArea'
 import { useLanguage } from '../i18n/LanguageContext'
 import type { Language } from '../i18n/LanguageContext'
 import type { Strings } from '../i18n/strings'
@@ -263,7 +265,7 @@ export function MapPage() {
     () => (feature?: Feature<GeometryObject, OpsPointProperties>) => {
       if (!feature) return {}
       if (!visibleOpsIdSet.has(feature.properties.id)) return { radius: 0, weight: 0, fillOpacity: 0, opacity: 0 }
-      return getOpsPointStyle(feature.properties.ops_type, feature.properties.id === selectedOpsId)
+      return getOpsPointStyle(feature.properties.ops_type, feature.properties.area_sqm, feature.properties.id === selectedOpsId)
     },
     [selectedOpsId, visibleOpsIdSet],
   )
@@ -427,8 +429,10 @@ export function MapPage() {
   // Only what's actually drawn right now — not just what's toggled on, so
   // e.g. a service-areas toggle with zero visible points doesn't still list
   // a swatch for nothing.
+  const showOpsSizeLegend = layerState['open-spaces'] && visibleOpsPoints.features.length > 0
+
   const legendRows: { id: string; label: string; swatch: ReactNode }[] = []
-  if (layerState['open-spaces'] && visibleOpsPoints.features.length > 0 && openSpacesLayer) {
+  if (showOpsSizeLegend && openSpacesLayer) {
     legendRows.push({ id: 'open-spaces', label: layerLabels[openSpacesLayer.id], swatch: <OpsTypeSwatch /> })
   }
   const zoomedServiceAreaVisible = isZoomedIn && selectedOpsAnalysis && analysisVisibility.serviceArea
@@ -659,7 +663,7 @@ export function MapPage() {
                     // bubblingMouseEvents: false keeps a marker click from also reaching the
                     // map's own click handler, which would immediately clear the selection.
                     circleMarker(latlng, {
-                      ...getOpsPointStyle(feature.properties.ops_type, false),
+                      ...getOpsPointStyle(feature.properties.ops_type, feature.properties.area_sqm, false),
                       pane: 'ops-pane',
                       bubblingMouseEvents: false,
                     })
@@ -702,7 +706,13 @@ export function MapPage() {
           {/* Basemap switcher and zoom controls share this top-left stack so
               the top-right corner stays free for the docked analysis card. */}
           <div className="pointer-events-auto absolute left-5 top-5 flex flex-col items-start gap-2">
-            <SegmentedControl value={basemap} onChange={setBasemap} options={basemapSegmentOptions} className="w-auto select-none shadow-card" />
+            <SegmentedControl
+              value={basemap}
+              onChange={setBasemap}
+              options={basemapSegmentOptions}
+              className="w-auto select-none shadow-card"
+              fitContent
+            />
 
             <div className="flex select-none flex-col overflow-hidden rounded-[9px] border border-line bg-white shadow-card">
               <button
@@ -734,7 +744,11 @@ export function MapPage() {
 
           {legendRows.length > 0 && (
             <div className="pointer-events-auto absolute bottom-5 left-5">
-              <MapLegendCard title={t.map.activeLayersLegendTitle} rows={legendRows} />
+              <MapLegendCard
+                title={t.map.activeLayersLegendTitle}
+                rows={legendRows}
+                extra={showOpsSizeLegend && <OpsSizeLegend label={t.map.sizeLegendLabel} language={language} />}
+              />
             </div>
           )}
 
@@ -1018,16 +1032,8 @@ function StatBox({ value, label, dotColor }: { value: number; label: string; dot
   )
 }
 
-function formatSqm(value: number): string {
-  return `${value.toLocaleString()} m²`
-}
-
 function formatKm(meters: number): string {
   return `${(meters / 1000).toFixed(2)} km`
-}
-
-function formatSqKm(sqm: number): string {
-  return `${(sqm / 1_000_000).toFixed(3)} km²`
 }
 
 type AnalysisVisibility = { network: boolean; serviceArea: boolean }
@@ -1093,7 +1099,7 @@ function OpsPopupCard({
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-line pt-2.5">
-        <PopupStat label={t.map.opsCard.areaLabel} value={formatSqm(properties.area_sqm)} />
+        <PopupStat label={t.map.opsCard.areaLabel} value={formatAreaSqm(properties.area_sqm, language)} />
         <PopupStat label={t.map.opsCard.openedLabel} value={formatYear(properties.opened_year, language)} />
         <PopupStat label={t.map.opsCard.agencyLabel} value={properties.agency} className="col-span-2" />
       </div>
@@ -1114,7 +1120,7 @@ function OpsPopupCard({
           <div>
             <div className="text-[12px] font-semibold text-ink">{t.map.opsCard.serviceAreaLabel}</div>
             <div className="text-[11px] text-slate">
-              {formatSqKm(analysis.serviceAreaSqm)} · {analysis.populationCovered.toLocaleString()} {t.map.opsCard.coveredSuffix}
+              {formatAreaSqKm(analysis.serviceAreaSqm, language)} · {analysis.populationCovered.toLocaleString()} {t.map.opsCard.coveredSuffix}
             </div>
           </div>
           {isZoomed && (
@@ -1178,7 +1184,7 @@ function StyleSwatch({ style, background }: { style: PathOptions; background?: s
   )
 }
 
-/** The 4 OPS type colors as a small dot cluster — used wherever "public green & open spaces" as a whole needs one swatch. */
+/** The 4 OPS type colors as a small dot cluster — used wherever "Open Public Space" as a whole needs one swatch. */
 function OpsTypeSwatch() {
   return (
     <span className="grid h-3 w-3 flex-none grid-cols-2 grid-rows-2 gap-[1px]">
@@ -1211,7 +1217,15 @@ function LayerSwatch({ layerId, basemap }: { layerId: string; basemap: BasemapKe
   return null
 }
 
-function MapLegendCard({ title, rows }: { title: string; rows: { id: string; label: string; swatch: ReactNode }[] }) {
+function MapLegendCard({
+  title,
+  rows,
+  extra,
+}: {
+  title: string
+  rows: { id: string; label: string; swatch: ReactNode }[]
+  extra?: ReactNode
+}) {
   return (
     <div className="w-[220px] select-none rounded-xl border border-line bg-card p-[14px_16px] shadow-card">
       <p className="mb-2 text-xs font-bold text-ink">{title}</p>
@@ -1222,6 +1236,39 @@ function MapLegendCard({ title, rows }: { title: string; rows: { id: string; lab
             {row.label}
           </div>
         ))}
+      </div>
+      {extra}
+    </div>
+  )
+}
+
+const OPS_SIZE_LEGEND_SQM = [1_000, 10_000, 50_000]
+const SIZE_LEGEND_BOX = 40
+
+/** 3 reference bubbles (by real OPS area, in m²) at the same radius the map's own points use, so the legend never drifts out of sync with what's actually drawn. */
+function OpsSizeLegend({ label, language }: { label: string; language: Language }) {
+  return (
+    <div className="mt-2.5 border-t border-line pt-2.5">
+      <p className="mb-1.5 text-[11px] font-semibold text-slate">{label}</p>
+      <div className="flex items-end gap-3">
+        {OPS_SIZE_LEGEND_SQM.map((sqm) => {
+          const radius = getOpsPointRadius(sqm)
+          return (
+            <div key={sqm} className="flex flex-col items-center gap-1">
+              <svg width={SIZE_LEGEND_BOX} height={SIZE_LEGEND_BOX} className="flex-none overflow-visible">
+                <circle
+                  cx={SIZE_LEGEND_BOX / 2}
+                  cy={SIZE_LEGEND_BOX - 4 - radius}
+                  r={radius}
+                  fill="none"
+                  stroke="var(--color-slate)"
+                  strokeWidth={1.5}
+                />
+              </svg>
+              <span className="text-[10px] text-mist">{formatAreaSqm(sqm, language)}</span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

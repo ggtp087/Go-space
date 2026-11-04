@@ -21,16 +21,16 @@ export function getKpisForYear(year: Year): KpiSample[] {
     {
       id: 'accessibility',
       value: `${Math.round(bangkok.access_pct)}%`,
-      label: 'Population accessibility — within 400 m of green & open space',
+      label: 'Population accessibility — within 400 m of an open public space',
       tone: 'green',
     },
     { id: 'covered', value: covered.toLocaleString(), label: 'Residents covered by a 400 m service area', tone: 'green' },
     { id: 'notCovered', value: notCovered.toLocaleString(), label: 'Residents not covered by a 400 m service area', tone: 'amber' },
-    { id: 'spaces', value: spaces.toLocaleString(), label: 'Public green & open spaces mapped citywide', tone: 'green' },
+    { id: 'spaces', value: spaces.toLocaleString(), label: 'Open public spaces mapped citywide', tone: 'green' },
     {
       id: 'opsShare',
       value: `${roundPct(bangkok.share_ops_pct)}%`,
-      label: 'Share of open public space (SDG 11.7.1)',
+      label: 'Open public space share (SDG 11.7.1)',
       tone: 'green',
     },
   ]

@@ -160,6 +160,9 @@ function buildOpsPoints(): FeatureCollection<Point, OpsPointProperties> {
     })
   }
 
+  // Largest bubble first in draw order, so a big park's circle never paints
+  // over (and makes unclickable) a small one sitting near its edge.
+  features.sort((a, b) => b.properties.area_sqm - a.properties.area_sqm)
   return { type: 'FeatureCollection', features }
 }
 

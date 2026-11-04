@@ -183,8 +183,8 @@ export function ComponentsPreviewPage() {
         <Section title="Toggle">
           <div className="flex flex-col gap-3">
             <label className="flex items-center gap-3 text-sm text-ink">
-              <Toggle checked={layerOn} onChange={setLayerOn} label="Public green & open spaces" />
-              Public green &amp; open spaces
+              <Toggle checked={layerOn} onChange={setLayerOn} label="Open Public Space" />
+              Open Public Space
             </label>
             <label className="flex items-center gap-3 text-sm text-ink">
               <Toggle checked={serviceAreaOn} onChange={setServiceAreaOn} label="400 m service areas" />
@@ -244,7 +244,7 @@ export function ComponentsPreviewPage() {
 
         <Section title="ProgressBar">
           <div className="max-w-md space-y-3">
-            <ProgressBar label="Open public space share" valueLabel={`${roundPct(featuredDistrict.share_ops_pct)}%`} value={featuredDistrict.share_ops_pct} />
+            <ProgressBar label="OPS Share" valueLabel={`${roundPct(featuredDistrict.share_ops_pct)}%`} value={featuredDistrict.share_ops_pct} />
             <ProgressBar label="Accessibility" valueLabel={`${Math.round(featuredDistrict.access_pct)}%`} value={featuredDistrict.access_pct} color={accessibilityColor(featuredDistrict.access_pct)} size="sm" />
           </div>
         </Section>

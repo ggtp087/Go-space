@@ -39,7 +39,7 @@ export function Navbar({ user }: NavbarProps) {
   const navLinks = [
     { to: '/map', label: t.nav.map },
     { to: '/dashboard', label: t.nav.dashboard },
-    { to: '/compare', label: t.nav.compare },
+    { to: '/comparison', label: t.nav.compare },
   ]
 
   return (

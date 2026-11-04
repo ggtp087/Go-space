@@ -31,7 +31,8 @@ function App() {
               <Route element={<AppLayout />}>
                 <Route path="/map" element={<MapPage />} />
                 <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/compare" element={<ComparePage />} />
+                <Route path="/comparison" element={<ComparePage />} />
+                <Route path="/compare" element={<Navigate to="/comparison" replace />} />
                 <Route path="/account" element={<AccountSettingsPage />} />
               </Route>
 

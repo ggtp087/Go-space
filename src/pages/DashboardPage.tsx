@@ -15,6 +15,7 @@ import { Sparkline } from '../components/dashboard/Sparkline'
 import { TrendChart, type TrendChartPoint } from '../components/dashboard/TrendChart'
 import { computeTrendYAxis } from '../components/dashboard/trendAxis'
 import { formatYear } from '../i18n/formatYear'
+import { formatAreaSqKm } from '../i18n/formatArea'
 import type { Language } from '../i18n/LanguageContext'
 import { useLanguage } from '../i18n/LanguageContext'
 import type { Strings } from '../i18n/strings'
@@ -487,11 +488,11 @@ export function DashboardPage() {
       render: (row) => totalOpsCount(row.ops_count),
     },
     {
-      key: 'opsAreaHa',
-      header: t.dashboard.columns.opsAreaHa,
+      key: 'opsAreaKm2',
+      header: t.dashboard.columns.opsAreaKm2,
       align: 'right',
       responsiveHide: 'md',
-      render: (row) => roundPct(row.ops_area_sqm / 10_000),
+      render: (row) => formatAreaSqKm(row.ops_area_sqm, language),
     },
     {
       key: 'share_ops_pct',
@@ -557,10 +558,11 @@ export function DashboardPage() {
                 yMin={accessAxis.min}
                 yMax={accessAxis.max}
                 yTicks={accessAxis.ticks}
-                color="var(--color-green-600)"
                 axisNote={t.dashboard.trend.axisNote}
                 language={language}
                 noDataLabel={t.common.noData}
+                colorBySegmentDirection
+                directionNote={t.dashboard.trend.directionNote}
               />
               <p className="mb-1 mt-5 text-[12.5px] font-semibold text-ink">{t.dashboard.charts.accessibilityChangePerYearTitle}</p>
               <p className="mb-2 text-[11px] text-slate">{t.dashboard.charts.accessibilityChangePerYearSubtitle}</p>
@@ -574,10 +576,11 @@ export function DashboardPage() {
                 yMin={shareAxis.min}
                 yMax={shareAxis.max}
                 yTicks={shareAxis.ticks}
-                color="var(--color-accent-600)"
                 axisNote={t.dashboard.trend.axisNote}
                 language={language}
                 noDataLabel={t.common.noData}
+                colorBySegmentDirection
+                directionNote={t.dashboard.trend.directionNote}
               />
               <p className="mb-1 mt-5 text-[12.5px] font-semibold text-ink">{t.dashboard.charts.opsShareChangePerYearTitle}</p>
               <p className="mb-2 text-[11px] text-slate">{t.dashboard.charts.opsShareChangePerYearSubtitle}</p>
@@ -585,21 +588,23 @@ export function DashboardPage() {
             </Card>
           </div>
 
-          <div className="mb-6 flex flex-wrap items-end gap-3 rounded-[14px] border border-line bg-card p-4">
-            <Select label={t.dashboard.controlBar.limitLabel} options={limitOptions} value={limit} onChange={(e) => setLimit(e.target.value as Limit)} className="w-28" />
-            <Select
-              label={t.dashboard.controlBar.sortByLabel}
-              options={sortOptions}
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortKey)}
-              className="w-44"
-            />
-            <Select label={t.dashboard.controlBar.orderLabel} options={orderOptions} value={order} onChange={(e) => setOrder(e.target.value as Order)} className="w-36" />
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-3 rounded-[14px] border border-line bg-card p-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <Select label={t.dashboard.controlBar.limitLabel} options={limitOptions} value={limit} onChange={(e) => setLimit(e.target.value as Limit)} className="w-28" />
+              <Select
+                label={t.dashboard.controlBar.sortByLabel}
+                options={sortOptions}
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortKey)}
+                className="w-44"
+              />
+              <Select label={t.dashboard.controlBar.orderLabel} options={orderOptions} value={order} onChange={(e) => setOrder(e.target.value as Order)} className="w-36" />
+            </div>
             <Input
               placeholder={t.dashboard.controlBar.searchPlaceholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="min-w-[200px] flex-1"
+              className="w-full sm:w-72"
             />
           </div>
 

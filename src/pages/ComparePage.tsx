@@ -25,6 +25,7 @@ import {
   getAllSubDistrictOptions,
   getAreaMeta,
   getAreaRow,
+  getChildAreaRows,
   getDistrictOptions,
   getFirstAreaId,
   getMetricSeries,
@@ -45,7 +46,7 @@ type ComparisonItem = {
 }
 
 const CHART_BAR_MAX_HEIGHT = 170
-const MAX_COMPARISON_AREAS = 4
+const MAX_COMPARISON_AREAS = 5
 
 /** A comparison area's name is only ever a seed value (set once, at add-time) — this always re-resolves the current name for its id/language instead, so a language switch (or the frozen defaultComparisonAreas seed) never shows a stale name. */
 function displayName(area: { id: string; name: string }, language: Language): string {
@@ -166,6 +167,35 @@ export function ComparePage() {
     setComparisonAreas((current) => current.filter((a) => a.id !== id))
   }
 
+  /**
+   * Replaces the whole comparison set with the 5 highest/lowest-accessibility
+   * areas for the current year, at the current year — same scope rule as the
+   * Dashboard control bar: ranks districts when no district is selected
+   * (useArea()'s districtId is 'all'), or that district's sub-districts
+   * otherwise.
+   */
+  function fillTopOrBottom(direction: 'top' | 'bottom') {
+    const rows = getChildAreaRows(districtId, year, language)
+      .slice()
+      .sort((a, b) => (direction === 'top' ? b.access_pct - a.access_pct : a.access_pct - b.access_pct))
+      .slice(0, MAX_COMPARISON_AREAS)
+    setComparisonAreas(
+      rows.map((row, index) => ({ id: row.id, name: row.name, level: row.level, color: comparisonPalette[index % comparisonPalette.length] })),
+    )
+  }
+
+  function topOrBottomTooltip(direction: 'top' | 'bottom'): string {
+    const template =
+      districtId === 'all'
+        ? direction === 'top'
+          ? t.compare.top5TooltipDistricts
+          : t.compare.bottom5TooltipDistricts
+        : direction === 'top'
+          ? t.compare.top5TooltipSubDistricts
+          : t.compare.bottom5TooltipSubDistricts
+    return template.replace('{year}', formatYear(year, language)).replace('{district}', getAreaMeta(districtId, language)?.name ?? '')
+  }
+
   function setAsReference(id: string) {
     setComparisonAreas((current) => {
       const index = current.findIndex((a) => a.id === id)
@@ -209,7 +239,7 @@ export function ComparePage() {
 
   const metricGroups: { key: MetricKey; label: string }[] = [
     { key: 'access_pct', label: t.compare.metricAccessibility },
-    { key: 'share_ops_pct', label: t.map.openSpaceShareLabel },
+    { key: 'share_ops_pct', label: t.compare.metricOpsShare },
   ]
 
   function metricValue(row: AreaRow | undefined, metric: MetricKey): number | null {
@@ -301,7 +331,14 @@ export function ComparePage() {
               {t.compare.addCurrentSelection.replace('{name}', displayName(currentSelectionMeta, language))}
             </Button>
           )}
+          <Button variant="ghost" onClick={() => fillTopOrBottom('top')} title={topOrBottomTooltip('top')}>
+            {t.compare.top5Label}
+          </Button>
+          <Button variant="ghost" onClick={() => fillTopOrBottom('bottom')} title={topOrBottomTooltip('bottom')}>
+            {t.compare.bottom5Label}
+          </Button>
           <div className="ml-auto">
+            <span className="mb-1.5 block text-[12.5px] font-semibold text-ink">{t.compare.yearLabel}</span>
             <YearSelect years={years} value={year} onChange={setYear} formatOption={(y) => formatYear(y, language)} />
           </div>
         </div>
@@ -321,7 +358,6 @@ export function ComparePage() {
                 <Chip key={y} label={formatYear(y, language)} selected={selectedYears.includes(y)} onSelect={() => toggleYear(y)} />
               ))}
             </div>
-            <p className="mt-1.5 text-[11px] text-mist">{t.compare.selectYearsHint}</p>
           </div>
         </div>
       )}
@@ -528,7 +564,7 @@ export function ComparePage() {
                 <div className="mt-4">
                   <ProgressBar
                     size="sm"
-                    label={t.map.openSpaceShareLabel}
+                    label={t.compare.metricOpsShare}
                     valueLabel={`${roundPct(item.row.share_ops_pct)}%`}
                     value={item.row.share_ops_pct}
                     color={item.color}
