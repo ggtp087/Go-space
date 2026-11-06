@@ -1,4 +1,4 @@
-import { roundPct } from '../../mock/areas'
+import { formatPct, roundPct } from '../../mock/areas'
 import { computeTrendYAxis } from './trendAxis'
 import { useChartWidth } from './useChartWidth'
 
@@ -136,7 +136,7 @@ export function AccessShareScatter({
                   strokeOpacity={isSelected ? 1 : isHighlighted ? 0.6 : 0.15}
                 >
                   <title>
-                    {row.name}: {axisLabels.x} {roundPct(row.share_ops_pct)}%, {axisLabels.y} {roundPct(row.access_pct)}%, {populationLabel}{' '}
+                    {row.name}: {axisLabels.x} {formatPct(row.share_ops_pct)}, {axisLabels.y} {formatPct(row.access_pct)}, {populationLabel}{' '}
                     {Math.round(row.total_population).toLocaleString()}
                   </title>
                 </circle>
@@ -162,7 +162,7 @@ export function AccessShareScatter({
             strokeWidth={3}
             paintOrder="stroke"
           >
-            {medianLabelTemplate.replace('{value}', String(roundPct(medianX)))}
+            {medianLabelTemplate.replace('{value}', roundPct(medianX).toFixed(1))}
           </text>
           <text
             x={width - MARGIN.right - 4}
@@ -174,7 +174,7 @@ export function AccessShareScatter({
             strokeWidth={3}
             paintOrder="stroke"
           >
-            {medianLabelTemplate.replace('{value}', String(roundPct(medianY)))}
+            {medianLabelTemplate.replace('{value}', roundPct(medianY).toFixed(1))}
           </text>
 
           <text x={xMidRight} y={yTop} textAnchor="middle" fontSize="11" fill="var(--color-mist)" stroke="var(--color-card)" strokeWidth={3} paintOrder="stroke">

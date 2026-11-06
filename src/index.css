@@ -65,3 +65,20 @@ body {
 .leaflet-control-scale {
   user-select: none;
 }
+
+/* The Dashboard choropleth's hover tooltip (bound via Leaflet's own
+   bindTooltip, not a React component — no className/style prop surface for
+   it either). */
+.choropleth-tooltip {
+  padding: 6px 9px;
+  border: none;
+  border-radius: 8px;
+  box-shadow: var(--shadow-card);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-ink);
+}
+.choropleth-tooltip-name {
+  font-weight: 700;
+}

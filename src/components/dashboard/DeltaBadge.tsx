@@ -1,6 +1,7 @@
 import type { Language } from '../../i18n/LanguageContext'
 import type { Strings } from '../../i18n/strings'
 import { formatYear } from '../../i18n/formatYear'
+import { formatPct } from '../../mock/areas'
 import type { Year } from '../../mock/years'
 
 type DeltaBadgeKind = 'vsPreviousYear' | 'sinceYear' | 'vsReference'
@@ -38,8 +39,8 @@ export function DeltaBadge({ currentValue, compareValue, kind, compareYear, unit
   const arrow = isUp ? '▲' : isDown ? '▼' : '–'
   const colorClass = isUp ? 'font-semibold text-green-700' : isDown ? 'font-semibold text-accent-600' : 'text-slate'
 
-  const compareValueText = `${round1(compareValue)}${unit}`
-  const currentValueText = `${round1(currentValue)}${unit}`
+  const compareValueText = unit === '%' ? formatPct(compareValue) : `${round1(compareValue)}${unit}`
+  const currentValueText = unit === '%' ? formatPct(currentValue) : `${round1(currentValue)}${unit}`
   const absDeltaText = `${isUp ? '+' : isDown ? '−' : ''}${Math.abs(delta)}`
   const yearText = compareYear !== undefined ? formatYear(compareYear, language) : ''
 
@@ -62,7 +63,7 @@ export function DeltaBadge({ currentValue, compareValue, kind, compareYear, unit
   }
 
   if (compact) {
-    const compactText = arrow === '–' ? '–' : `${absDeltaText} pp`
+    const compactText = arrow === '–' ? '–' : `${absDeltaText} ${t.dashboard.trend.pointsAbbrev}`
     return (
       <span className={colorClass} title={`${arrow} ${fullText}`}>
         {compactText}

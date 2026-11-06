@@ -37,6 +37,18 @@ export function roundPct(value: number, decimals = 1): number {
   return Math.round(value * factor) / factor
 }
 
+/**
+ * The one percent-display formatter for the Dashboard and Comparison pages —
+ * always one decimal (e.g. "79.0%"), so a whole-number value never silently
+ * drops its decimal the way `${roundPct(value)}%` does (roundPct(79) is the
+ * number 79, which interpolates as "79" not "79.0"). Every displayed
+ * percentage on those two pages should go through this, not roundPct+`%`
+ * directly, so the decimal can't drift back out of sync.
+ */
+export function formatPct(value: number): string {
+  return `${roundPct(value).toFixed(1)}%`
+}
+
 /** Color for a given accessibility percentage, on the 5-step scale. */
 export function accessibilityColor(pct: number): string {
   return getAccessibilityColor(pct)
@@ -46,16 +58,23 @@ export type AccessibilityBracket = {
   color: string
   label: string
   count: number
+  population: number
+  ids: string[]
 }
 
-/** How many of the given accessibility percentages fall into each step of the 5-step scale — classified the same way (on the rounded value) as the bar/choropleth colors, via getAccessibilityBand. */
-export function getAccessibilityBrackets(values: number[]): AccessibilityBracket[] {
+/** How many (and which) of the given areas fall into each step of the 5-step scale — classified the same way (on the rounded value) as the bar/choropleth colors, via getAccessibilityBand. Carries each band's area ids (for a legend-click highlight) and total population (for a "3 districts · 410,000 people" row). */
+export function getAccessibilityBrackets(rows: { id: string; access_pct: number; total_population: number }[]): AccessibilityBracket[] {
   return accessibilityScale
     .slice()
     .reverse()
-    .map((band) => ({
-      color: band.color,
-      label: band.label,
-      count: values.filter((value) => getAccessibilityBand(value) === band).length,
-    }))
+    .map((band) => {
+      const matching = rows.filter((row) => getAccessibilityBand(row.access_pct) === band)
+      return {
+        color: band.color,
+        label: band.label,
+        count: matching.length,
+        population: matching.reduce((sum, row) => sum + row.total_population, 0),
+        ids: matching.map((row) => row.id),
+      }
+    })
 }

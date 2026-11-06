@@ -142,13 +142,11 @@ export const mapStyle = {
 }
 
 // Categorical palette for "which area is this" series (Compare's chips,
-// bars, and later lines/outlines) — up to 5 areas, each a clearly distinct
-// tone. Deliberately outside the green→orange hues of accessibilityScale
-// below (so a series color is never mistaken for an accessibility class)
-// and outside red (the map's selection color) — the 5th color is a neutral
-// slate rather than another saturated hue, since every other spot on the
-// wheel not already used risked reading as a dim version of one of the four.
-export const comparisonPalette = ['#2563EB', '#7C3AED', '#DB2777', '#0891B2', '#475569']
+// bars, legend, trend lines, and choropleth outlines) — up to 5 areas, each
+// a clearly distinct hue. No purple (too close to blue at outline weight),
+// no orange/yellow (they vanish against accessibilityScale's own green→
+// orange fills below), and no red (the map's selection color).
+export const comparisonPalette = ['#2563EB', '#DB2777', '#0D9488', '#8C564B', '#334155']
 
 // The one source for the 5-step accessibility color scale — the Dashboard's
 // choropleth/brackets/ranking, mock/areas.ts's accessibilityColor(), and the
@@ -186,16 +184,20 @@ export function getAccessibilityColor(pct: number): string {
  * page's own GIS-mode rendering) with the fill swapped for the
  * accessibility color instead of the neutral boundary fill.
  */
-export function getChoroplethStyle(fillColor: string, level: 'district' | 'sub-district'): PathOptions {
+export function getChoroplethStyle(
+  fillColor: string,
+  level: 'district' | 'sub-district',
+  options?: { interactive?: boolean; fillOpacity?: number; weight?: number; color?: string },
+): PathOptions {
   const base = level === 'district' ? mapStyle.district : mapStyle.subDistrict
   return {
-    color: base.color,
-    weight: base.weight,
+    color: options?.color ?? base.color,
+    weight: options?.weight ?? base.weight,
     dashArray: level === 'sub-district' ? mapStyle.subDistrict.dashArray : undefined,
     fillColor,
-    fillOpacity: 0.85,
+    fillOpacity: options?.fillOpacity ?? 0.85,
     fill: true,
-    interactive: false,
+    interactive: options?.interactive ?? false,
   }
 }
 

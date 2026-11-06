@@ -46,12 +46,14 @@ function resolveStrings(language: Language): Strings {
     dashboard: {
       ...en.dashboard,
       ...th.dashboard,
+      byDistrictSummary: { ...en.dashboard.byDistrictSummary, ...th.dashboard?.byDistrictSummary },
       columns: { ...en.dashboard.columns, ...th.dashboard?.columns },
       kpi: { ...en.dashboard.kpi, ...th.dashboard?.kpi },
       trend: { ...en.dashboard.trend, ...th.dashboard?.trend },
       sections: { ...en.dashboard.sections, ...th.dashboard?.sections },
       charts: { ...en.dashboard.charts, ...th.dashboard?.charts },
       controlBar: { ...en.dashboard.controlBar, ...th.dashboard?.controlBar },
+      rankingTitle: { ...en.dashboard.rankingTitle, ...th.dashboard?.rankingTitle },
     },
     compare: { ...en.compare, ...th.compare },
     auth: {

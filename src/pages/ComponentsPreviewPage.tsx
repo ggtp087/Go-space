@@ -262,6 +262,7 @@ export function ComponentsPreviewPage() {
               { value: 'district', label: t.adminLevel.district },
               { value: 'sub-district', label: t.adminLevel.subDistrict },
             ]}
+            fitContent
           />
         </Section>
 

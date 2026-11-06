@@ -7,8 +7,7 @@ import { useChartWidth } from './useChartWidth'
 type DeltaBarChartProps = {
   points: TrendChartPoint[]
   height?: number
-  unit?: string
-  /** Converts every displayed year (axis labels, tooltips) to Buddhist Era in Thai mode — defaults to English/CE. */
+  /** Converts every displayed year (axis labels, tooltips) to Buddhist Era in Thai mode, and the delta tooltip's unit ("pp" vs. "จุด") — defaults to English/CE. */
   language?: Language
 }
 
@@ -25,7 +24,8 @@ function round1(value: number): number {
  * off the slope by eye. The first year has no previous value, so it has no
  * bar (matches TrendChart's own "first year of data" treatment).
  */
-export function DeltaBarChart({ points, height = 110, unit = 'pp', language = 'en' }: DeltaBarChartProps) {
+export function DeltaBarChart({ points, height = 110, language = 'en' }: DeltaBarChartProps) {
+  const unit = language === 'th' ? 'จุด' : 'pp'
   const { ref, width } = useChartWidth(600)
   const deltas = points.map((point, index) => {
     const prev = index > 0 ? points[index - 1].value : null

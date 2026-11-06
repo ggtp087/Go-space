@@ -1,4 +1,4 @@
-import { roundPct } from '../../mock/areas'
+import { formatPct } from '../../mock/areas'
 import { computeCountAxis } from './trendAxis'
 import { useChartWidth } from './useChartWidth'
 
@@ -74,12 +74,12 @@ export function CoverageStackedBar({ rows, selectedId, coveredLabel, notCoveredL
 
           {rows.map((row, index) => {
             const notCovered = row.total_population - row.population_with_access
-            const coveredPct = row.total_population > 0 ? roundPct((row.population_with_access / row.total_population) * 100) : 0
+            const coveredPctText = row.total_population > 0 ? formatPct((row.population_with_access / row.total_population) * 100) : formatPct(0)
             const x = xAt(index) - barWidth / 2
             const isSelected = row.id === selectedId
             const tooltip = [
               row.name,
-              `${coveredLabel}: ${Math.round(row.population_with_access).toLocaleString()} (${coveredPct}%)`,
+              `${coveredLabel}: ${Math.round(row.population_with_access).toLocaleString()} (${coveredPctText})`,
               `${notCoveredLabel}: ${Math.round(notCovered).toLocaleString()}`,
               `${populationLabel}: ${Math.round(row.total_population).toLocaleString()}`,
             ].join('\n')
@@ -107,7 +107,7 @@ export function CoverageStackedBar({ rows, selectedId, coveredLabel, notCoveredL
                   <title>{tooltip}</title>
                 </rect>
                 <text x={xAt(index)} y={yAt(row.total_population) - 6} textAnchor="middle" fontSize="12" fontWeight={700} fill="var(--color-ink)">
-                  {coveredPct}%
+                  {coveredPctText}
                 </text>
                 <text
                   x={xAt(index)}
