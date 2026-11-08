@@ -212,6 +212,7 @@ export function ComparePage() {
         }))
 
   const referenceRow = mode === 'districts' ? comparisonItems[0]?.row : undefined
+  const referenceAreaName = comparisonItems[0]?.title ?? ''
 
   const yearsAccessSeries = getMetricSeries(yearsAreaId, 'access_pct')
   const yearsShareSeries = getMetricSeries(yearsAreaId, 'share_ops_pct')
@@ -427,37 +428,37 @@ export function ComparePage() {
         </Card>
       )}
 
-      <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-6 flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory">
         {comparisonItems.map((item, index) => (
-          <Card key={item.key} className="overflow-hidden">
-            <div className="mb-1 flex items-center justify-center gap-2">
+          <Card key={item.key} className="min-w-[200px] flex-1 snap-start overflow-hidden">
+            <div className="mb-1 flex items-center justify-center gap-1.5">
               <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ background: item.color }} />
-              <h3 className="text-[15px] font-bold text-ink">{item.title}</h3>
+              <h3 className="truncate text-[13.5px] font-bold text-ink">{item.title}</h3>
             </div>
-            <p className="mb-3 text-center text-xs text-slate">{item.subtitle}</p>
+            <p className="mb-2 text-center text-[11px] text-slate">{item.subtitle}</p>
 
             {!item.row ? (
-              <div className="rounded-lg border border-dashed border-line-2 p-4 text-center">
-                <p className="text-[13px] font-semibold text-ink">{t.common.noDataTitle}</p>
-                <p className="mt-1 text-[12px] text-slate">
+              <div className="rounded-lg border border-dashed border-line-2 p-3 text-center">
+                <p className="text-[12.5px] font-semibold text-ink">{t.common.noDataTitle}</p>
+                <p className="mt-1 text-[11px] text-slate">
                   {t.common.noDataBody.replace('{year}', item.title.match(/^\d{4}$/) ? item.title : formatYear(year, language))}
                 </p>
               </div>
             ) : (
               <>
-                <div className="flex justify-center">
+                <p className="mb-1 text-center text-[10.5px] whitespace-nowrap text-slate">{t.compare.accessibilityCaption}</p>
+                <div className="flex justify-center" title={t.compare.accessibilityTooltip}>
                   <DonutChart
-                    size={152}
-                    strokeWidth={11}
-                    centerFontSize={26}
+                    size={116}
+                    strokeWidth={9}
+                    centerFontSize={20}
                     percent={item.row.access_pct}
                     centerLabel={formatPct(item.row.access_pct)}
-                    subLabel={t.compare.ofResidentsAccessible}
                     color={accessibilityColor(item.row.access_pct)}
                   />
                 </div>
                 {mode === 'districts' && (
-                  <p className="mt-1 text-center text-[11px]">
+                  <p className="mt-1 text-center text-[11px] whitespace-nowrap">
                     {index === 0 ? (
                       <span className="text-mist">{t.compare.referenceBadge}</span>
                     ) : referenceRow ? (
@@ -465,6 +466,8 @@ export function ComparePage() {
                         currentValue={item.row.access_pct}
                         compareValue={referenceRow.access_pct}
                         kind="vsReference"
+                        compact
+                        referenceName={referenceAreaName}
                         t={t}
                         language={language}
                       />
@@ -472,24 +475,24 @@ export function ComparePage() {
                   </p>
                 )}
 
-                <div className="mt-4 flex justify-around text-center text-[11px] text-slate">
-                  <div>
-                    <div className="text-[15px] font-bold text-ink tabular-nums">{Math.round(item.row.total_population).toLocaleString()}</div>
-                    {t.compare.populationLabel}
+                <div className="mt-3 space-y-1 text-[11px] text-slate">
+                  <div className="flex items-center justify-between gap-2">
+                    <span>{t.compare.populationLabel}</span>
+                    <span className="font-bold text-ink tabular-nums">{Math.round(item.row.total_population).toLocaleString()}</span>
                   </div>
-                  <div>
-                    <div className="text-[15px] font-bold text-ink tabular-nums">{Math.round(item.row.population_with_access).toLocaleString()}</div>
-                    {t.map.coveredLabel}
+                  <div className="flex items-center justify-between gap-2">
+                    <span>{t.map.coveredLabel}</span>
+                    <span className="font-bold text-ink tabular-nums">{Math.round(item.row.population_with_access).toLocaleString()}</span>
                   </div>
-                  <div>
-                    <div className="text-[15px] font-bold text-ink tabular-nums">
+                  <div className="flex items-center justify-between gap-2">
+                    <span>{t.map.notCoveredLabel}</span>
+                    <span className="font-bold text-ink tabular-nums">
                       {Math.round(item.row.total_population - item.row.population_with_access).toLocaleString()}
-                    </div>
-                    {t.map.notCoveredLabel}
+                    </span>
                   </div>
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-3">
                   <ProgressBar
                     size="sm"
                     label={t.compare.metricOpsShare}
@@ -498,7 +501,7 @@ export function ComparePage() {
                     color={item.color}
                   />
                   {mode === 'districts' && (
-                    <p className="mt-1 text-center text-[11px]">
+                    <p className="mt-1 text-center text-[11px] whitespace-nowrap">
                       {index === 0 ? (
                         <span className="text-mist">{t.compare.referenceBadge}</span>
                       ) : referenceRow ? (
@@ -506,6 +509,8 @@ export function ComparePage() {
                           currentValue={item.row.share_ops_pct}
                           compareValue={referenceRow.share_ops_pct}
                           kind="vsReference"
+                          compact
+                          referenceName={referenceAreaName}
                           t={t}
                           language={language}
                         />

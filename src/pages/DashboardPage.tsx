@@ -124,7 +124,7 @@ function kpiDeltaFooter(
     return <span className={colorClass}>{t.dashboard.trend.noChange}</span>
   }
 
-  const absText = kind === 'pp' ? String(Math.abs(delta)) : Math.abs(delta).toLocaleString()
+  const absText = kind === 'pp' ? Math.abs(delta).toFixed(1) : Math.abs(delta).toLocaleString()
   const signedText = `${delta > 0 ? '+' : '−'}${absText}`
   const template = kind === 'pp' ? t.dashboard.kpi.deltaPercentagePoints : kind === 'people' ? t.dashboard.kpi.deltaPeople : t.dashboard.kpi.deltaPlaces
   const text = template.replace('{delta}', signedText).replace('{year}', formatYear(previousYear, language))
@@ -482,6 +482,9 @@ export function DashboardPage() {
   const byDistrictTitle = isWholeCity
     ? t.dashboard.byDistrictCardTitle
     : t.dashboard.byDistrictCardTitleSubDistrictOf.replace('{district}', districtName)
+  const byDistrictSubtitle = isWholeCity
+    ? t.dashboard.byDistrictCardSubtitle
+    : t.dashboard.byDistrictCardSubtitleInDistrict.replace('{district}', districtName)
   const tableTitle = isWholeCity ? t.dashboard.tableCardTitle : t.dashboard.tableCardTitleSubDistrictOf.replace('{district}', districtName)
   const tableFooterTemplate = isWholeCity ? t.dashboard.tableFooter : t.dashboard.tableFooterSubDistrict
 
@@ -770,7 +773,7 @@ export function DashboardPage() {
             <p className="mb-10 rounded-lg border border-dashed border-line-2 p-4 text-center text-[13px] text-slate">{noMatchesMessage}</p>
           ) : (
             <div className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-5">
-              <Card className="xl:col-span-3" title={byDistrictTitle} subtitle={t.dashboard.byDistrictCardSubtitle} note={t.common.sampleDataTag}>
+              <Card className="xl:col-span-3" title={byDistrictTitle} subtitle={byDistrictSubtitle} note={t.common.sampleDataTag}>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
                   <AccessibilityChoropleth
                     districtId={districtId}

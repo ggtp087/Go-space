@@ -1,5 +1,5 @@
 import { BANGKOK_AREA_ID, getAssessmentResult, totalOpsCount } from './assessmentResults'
-import { roundPct } from './areas'
+import { formatPct } from './areas'
 import type { Year } from './years'
 
 export type KpiSample = {
@@ -29,7 +29,7 @@ export function getKpisForYear(year: Year): KpiSample[] {
     { id: 'spaces', value: spaces.toLocaleString(), label: 'Open public spaces mapped citywide', tone: 'green' },
     {
       id: 'opsShare',
-      value: `${roundPct(bangkok.share_ops_pct)}%`,
+      value: formatPct(bangkok.share_ops_pct),
       label: 'Open public space share (SDG 11.7.1)',
       tone: 'green',
     },

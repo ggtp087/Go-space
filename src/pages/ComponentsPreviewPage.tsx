@@ -16,7 +16,7 @@ import { DataTable, type DataTableColumn } from '../components/ui/DataTable'
 import { YearSelect } from '../components/ui/YearSelect'
 import { useLanguage } from '../i18n/LanguageContext'
 import { getKpisForYear } from '../mock/kpis'
-import { accessibilityColor, roundPct } from '../mock/areas'
+import { accessibilityColor, formatPct } from '../mock/areas'
 import {
   defaultComparisonAreas,
   getAreaRowsForYear,
@@ -100,7 +100,7 @@ const TABLE_COLUMNS: DataTableColumn<AreaRow>[] = [
     sortValue: (row) => totalOpsCount(row.ops_count),
     render: (row) => totalOpsCount(row.ops_count),
   },
-  { key: 'share_ops_pct', header: 'OPS share %', sortable: true, align: 'right', render: (row) => `${roundPct(row.share_ops_pct)}%` },
+  { key: 'share_ops_pct', header: 'OPS share %', sortable: true, align: 'right', render: (row) => formatPct(row.share_ops_pct) },
 ]
 
 export function ComponentsPreviewPage() {
@@ -244,7 +244,7 @@ export function ComponentsPreviewPage() {
 
         <Section title="ProgressBar">
           <div className="max-w-md space-y-3">
-            <ProgressBar label="OPS Share" valueLabel={`${roundPct(featuredDistrict.share_ops_pct)}%`} value={featuredDistrict.share_ops_pct} />
+            <ProgressBar label="OPS Share" valueLabel={formatPct(featuredDistrict.share_ops_pct)} value={featuredDistrict.share_ops_pct} />
             <ProgressBar label="Accessibility" valueLabel={`${Math.round(featuredDistrict.access_pct)}%`} value={featuredDistrict.access_pct} color={accessibilityColor(featuredDistrict.access_pct)} size="sm" />
           </div>
         </Section>

@@ -49,10 +49,11 @@ import type { Strings } from '../i18n/strings'
 import { useYear } from '../state/YearContext'
 import { useArea } from '../state/AreaContext'
 import { basemapOptions } from '../mock/basemaps'
-import { localizedName, roundPct } from '../mock/areas'
+import { formatPct, localizedName } from '../mock/areas'
 import { BANGKOK_AREA_ID, areaHasAnyData, getAreaMeta, getAreaRow, getMetricSeries } from '../mock/assessmentResults'
 import { mapLayers } from '../mock/mapLayers'
 import { getNearbySpaces } from '../mock/nearbySpaces'
+import { MIN_LABEL_FOOTPRINT_PX, escapeLabelText, estimateLabelBox, labelBoxesOverlap, type LabelBox } from '../components/map/labelPlacement'
 
 // Starting view + hard pan/zoom limits for the map. The bounds are a
 // placeholder padded box around Bangkok; once district boundary data exists,
@@ -815,7 +816,7 @@ export function MapPage() {
         ) : (
           <>
             <div className="mt-[18px] flex items-center gap-[18px]">
-              <DonutChart percent={focusRow.access_pct} centerLabel={`${roundPct(focusRow.access_pct)}%`} subLabel={t.map.ofResidents} />
+              <DonutChart percent={focusRow.access_pct} centerLabel={formatPct(focusRow.access_pct)} subLabel={t.map.ofResidents} />
               <p className="text-[12.5px] leading-[1.5] text-slate">{t.map.accessibilityDescription}</p>
             </div>
 
@@ -832,7 +833,7 @@ export function MapPage() {
               <SectionTitle>{t.map.sdgSectionTitle}</SectionTitle>
               <ProgressBar
                 label={t.map.openSpaceShareLabel}
-                valueLabel={`${roundPct(focusRow.share_ops_pct)}%`}
+                valueLabel={formatPct(focusRow.share_ops_pct)}
                 value={focusRow.share_ops_pct}
               />
             </div>
@@ -863,7 +864,7 @@ export function MapPage() {
                 <div className="text-[11px] text-slate">{t.map.opsTypes[space.type]}</div>
               </div>
               <span className="ml-auto rounded-full bg-green-50 px-2 py-[3px] text-[11.5px] font-semibold text-green-700">
-                {space.distanceM} m
+                {space.distanceM} {t.common.meterUnit}
               </span>
             </div>
             ))
@@ -872,15 +873,6 @@ export function MapPage() {
       </SidePanel>
     </div>
   )
-}
-
-// Below this on-screen footprint (px, in either dimension), an area reads as
-// a sliver too small to plausibly carry a text label without just adding
-// clutter — its label is dropped before collision placement even considers it.
-const MIN_LABEL_FOOTPRINT_PX = 26
-
-function escapeLabelText(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 function labelIcon(text: string, tier: 'district' | 'sub-district', basemap: BasemapKey) {
@@ -895,17 +887,6 @@ function labelIcon(text: string, tier: 'district' | 'sub-district', basemap: Bas
   const halo = [-1, 1].flatMap((dx) => [-1, 1].map((dy) => `${dx}px ${dy}px 1.5px ${colors.haloColor}`)).join(',') + `,0 0 3px ${colors.haloColor}`
   const html = `<span style="display:inline-block;transform:translate(-50%,-50%);white-space:nowrap;font-family:inherit;font-size:${fontSize}px;font-weight:${fontWeight};color:${color};text-shadow:${halo};">${escapeLabelText(text)}</span>`
   return divIcon({ html, className: '' })
-}
-
-/** A deliberately rough text-width estimate (no DOM measurement) — good enough for a greedy collision check, not pixel-perfect layout. */
-function estimateLabelBox(text: string, fontSize: number): { width: number; height: number } {
-  return { width: text.length * fontSize * 0.62 + 6, height: fontSize * 1.5 }
-}
-
-type LabelBox = { x: number; y: number; width: number; height: number }
-
-function labelBoxesOverlap(a: LabelBox, b: LabelBox): boolean {
-  return Math.abs(a.x - b.x) * 2 < a.width + b.width && Math.abs(a.y - b.y) * 2 < a.height + b.height
 }
 
 type AreaFeature = Feature<MultiPolygon, { id: string; name: string; name_th: string; area_sqm: number }>

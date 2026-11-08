@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react'
-import { GeoJSON, MapContainer, Pane, useMap } from 'react-leaflet'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { GeoJSON, MapContainer, Marker, Pane, useMap, useMapEvents } from 'react-leaflet'
+import { divIcon } from 'leaflet'
 import type { Layer, LatLngTuple } from 'leaflet'
 import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon, Position } from 'geojson'
 import 'leaflet/dist/leaflet.css'
@@ -11,9 +12,11 @@ import {
   getSubDistrictFeature,
   mockDistrictBoundaries,
   mockSubDistrictBoundaries,
+  multiPolygonBounds,
 } from '../../mock/mapBoundaries'
 import { BANGKOK_AREA_ID, getAreaMeta, getAssessmentResult } from '../../mock/assessmentResults'
-import { formatPct } from '../../mock/areas'
+import { formatPct, localizedName } from '../../mock/areas'
+import { MIN_LABEL_FOOTPRINT_PX, escapeLabelText, estimateLabelBox, findPolygonInteriorPoint, labelBoxesOverlap, type LabelBox } from '../map/labelPlacement'
 import type { Language } from '../../i18n/LanguageContext'
 import type { Year } from '../../mock/years'
 
@@ -159,6 +162,24 @@ export function AccessibilityChoropleth({
     [isWholeCity, districtId],
   )
 
+  // A separate, richer-typed memo from areaFeatureCollection above (whose own
+  // properties are narrowed to just { id }) — name/name_th/area_sqm are
+  // needed for the label layer, and each feature's interior-point anchor is
+  // computed once here (keyed on the same feature set), not per zoom/move.
+  const labelFeatures = useMemo<ChoroplethLabelFeature[]>(() => {
+    const features = isWholeCity
+      ? mockDistrictBoundaries.features
+      : mockSubDistrictBoundaries.features.filter((feature) => feature.properties.district_id === districtId)
+    return features.map((feature) => ({
+      id: feature.properties.id,
+      name: feature.properties.name,
+      name_th: feature.properties.name_th,
+      area_sqm: feature.properties.area_sqm,
+      coordinates: feature.geometry.coordinates,
+      anchor: findPolygonInteriorPoint(feature.geometry.coordinates),
+    }))
+  }, [isWholeCity, districtId])
+
   const bandActive = !!highlightIds && highlightIds.size > 0
   const selectionActive = !bandActive && !!selectionIds && selectionIds.size > 0
 
@@ -171,20 +192,20 @@ export function AccessibilityChoropleth({
         const fillColor = getAccessibilityColor(stats?.access_pct ?? 0)
         if (bandActive) {
           const isFaded = !highlightIds!.has(id)
-          return getChoroplethStyle(fillColor, level, { interactive, fillOpacity: isFaded ? 0.15 : 0.85 })
+          return getChoroplethStyle(fillColor, { interactive, fillOpacity: isFaded ? 0.15 : 0.85 })
         }
         if (selectionActive) {
           const inSelection = selectionIds!.has(id)
-          return getChoroplethStyle(fillColor, level, {
+          return getChoroplethStyle(fillColor, {
             interactive,
             fillOpacity: inSelection ? 0.85 : 0.45,
             weight: inSelection ? SELECTION_OUTLINE_WEIGHT : undefined,
             color: inSelection ? SELECTION_OUTLINE_COLOR : undefined,
           })
         }
-        return getChoroplethStyle(fillColor, level, { interactive, fillOpacity: 0.85 })
+        return getChoroplethStyle(fillColor, { interactive, fillOpacity: 0.85 })
       },
-    [level, year, interactive, bandActive, highlightIds, selectionActive, selectionIds],
+    [year, interactive, bandActive, highlightIds, selectionActive, selectionIds],
   )
 
   // Tooltip binding + click handling are set up once per GeoJSON mount (not
@@ -250,6 +271,9 @@ export function AccessibilityChoropleth({
             return feature && <GeoJSON key={highlight.id} data={feature} style={getColoredHighlightStyle(highlight.color)} />
           })}
         </Pane>
+        <Pane name="choropleth-labels-pane" style={{ zIndex: 404, pointerEvents: 'none' }}>
+          <ChoroplethLabels features={labelFeatures} tier={level} language={language} />
+        </Pane>
         <FitBoundsOnChange latLngs={fitLatLngs} />
       </MapContainer>
     </div>
@@ -290,4 +314,62 @@ function FitBoundsOnChange({ latLngs }: { latLngs: LatLngTuple[] }) {
   }, [map])
 
   return null
+}
+
+type ChoroplethLabelFeature = { id: string; name: string; name_th: string; area_sqm: number; coordinates: Position[][][]; anchor: Position }
+
+/** White-halo, non-interactive name label — always dark slate text, unlike the Map page's labelIcon which recolors per basemap (this choropleth only ever sits on a plain white card background). */
+function choroplethLabelIcon(text: string, tier: 'district' | 'sub-district') {
+  const fontSize = tier === 'district' ? 12 : 10.5
+  const halo = [-1, 1].flatMap((dx) => [-1, 1].map((dy) => `${dx}px ${dy}px 1.5px #FFFFFF`)).join(',') + ',0 0 3px #FFFFFF'
+  const html = `<span style="display:inline-block;transform:translate(-50%,-50%);white-space:nowrap;font-family:inherit;font-size:${fontSize}px;font-weight:600;color:#1E293B;text-shadow:${halo};">${escapeLabelText(text)}</span>`
+  return divIcon({ html, className: '' })
+}
+
+/**
+ * District/sub-district name labels for the Dashboard choropleth — anchored
+ * at each feature's pre-computed interior point (not the bbox center), with
+ * the same greedy largest-first collision placement as the Map page's own
+ * AreaLabels (shared via labelPlacement.ts). Deliberately skips that
+ * component's zoom-threshold gating: this map's small embedded size means it
+ * typically fits-to-bounds at a much lower absolute zoom than the full-
+ * screen Map page ever reaches for the same real-world extent, so reusing
+ * those literal thresholds would hide every label here. The on-screen-
+ * footprint filter (MIN_LABEL_FOOTPRINT_PX) is what actually does the
+ * filtering work instead.
+ */
+function ChoroplethLabels({ features, tier, language }: { features: ChoroplethLabelFeature[]; tier: 'district' | 'sub-district'; language: Language }) {
+  // Same pattern as the Map page's AreaLabels: the state value itself is
+  // never read, just used to force a recompute on zoomend/moveend (the
+  // placement below reads the map's current projection directly).
+  const [, forceRecompute] = useState(0)
+  const map = useMapEvents({
+    zoomend: () => forceRecompute((v) => v + 1),
+    moveend: () => forceRecompute((v) => v + 1),
+  })
+
+  function fitsOnScreen(coordinates: Position[][][]): boolean {
+    const bounds = multiPolygonBounds(coordinates)
+    const topLeft = map.latLngToContainerPoint([bounds.maxLat, bounds.minLon])
+    const bottomRight = map.latLngToContainerPoint([bounds.minLat, bounds.maxLon])
+    return Math.abs(bottomRight.x - topLeft.x) >= MIN_LABEL_FOOTPRINT_PX && Math.abs(bottomRight.y - topLeft.y) >= MIN_LABEL_FOOTPRINT_PX
+  }
+
+  const fontSize = tier === 'district' ? 12 : 10.5
+  const candidates = features.filter((feature) => fitsOnScreen(feature.coordinates)).sort((a, b) => b.area_sqm - a.area_sqm)
+
+  const placedBoxes: LabelBox[] = []
+  const markers = []
+  for (const feature of candidates) {
+    const [lon, lat] = feature.anchor
+    const point = map.latLngToContainerPoint([lat, lon])
+    const name = localizedName(feature.name, feature.name_th, language)
+    const { width, height } = estimateLabelBox(name, fontSize)
+    const box: LabelBox = { x: point.x, y: point.y, width, height }
+    if (placedBoxes.some((placed) => labelBoxesOverlap(placed, box))) continue
+    placedBoxes.push(box)
+    markers.push(<Marker key={feature.id} position={[lat, lon]} interactive={false} icon={choroplethLabelIcon(name, tier)} />)
+  }
+
+  return <>{markers}</>
 }

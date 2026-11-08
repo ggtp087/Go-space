@@ -124,6 +124,15 @@ export const mapStyle = {
     color: '#374151',
     weight: 3,
   },
+  // The Dashboard choropleth's own boundary stroke — deliberately distinct
+  // from mapStyle.subDistrict above (that one's faint dashed gray is the Map
+  // page's own GIS-mode convention and must stay as-is). A choropleth fill
+  // needs a solid, dark line on top of it to read clearly at any zoom, for
+  // both the district and sub-district level.
+  choroplethBoundary: {
+    color: '#334155',
+    weight: 1.5,
+  },
   // Selected district/sub-district boundary — drawn regardless of the
   // district/sub-district boundary toggles, so picking an area always shows
   // where it is. Red (not navy) so a selection is unmistakable from the
@@ -179,21 +188,19 @@ export function getAccessibilityColor(pct: number): string {
 
 /**
  * Choropleth fill for a district/sub-district polygon, colored by its own
- * access_pct — reuses the sub-district/district stroke/weight/dashArray
- * tokens above (so it still reads as the same kind of boundary as the Map
- * page's own GIS-mode rendering) with the fill swapped for the
- * accessibility color instead of the neutral boundary fill.
+ * access_pct — stroked with mapStyle.choroplethBoundary (solid, dark slate)
+ * rather than the Map page's own faint dashed subDistrict/district tokens,
+ * so the boundary reads clearly on top of the accessibility fill. Never
+ * dashed — the same stroke at either level, so there's no `level` param.
  */
 export function getChoroplethStyle(
   fillColor: string,
-  level: 'district' | 'sub-district',
   options?: { interactive?: boolean; fillOpacity?: number; weight?: number; color?: string },
 ): PathOptions {
-  const base = level === 'district' ? mapStyle.district : mapStyle.subDistrict
   return {
-    color: options?.color ?? base.color,
-    weight: options?.weight ?? base.weight,
-    dashArray: level === 'sub-district' ? mapStyle.subDistrict.dashArray : undefined,
+    color: options?.color ?? mapStyle.choroplethBoundary.color,
+    weight: options?.weight ?? mapStyle.choroplethBoundary.weight,
+    dashArray: undefined,
     fillColor,
     fillOpacity: options?.fillOpacity ?? 0.85,
     fill: true,
