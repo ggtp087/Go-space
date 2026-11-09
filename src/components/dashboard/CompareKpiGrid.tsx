@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { DeltaBadge } from './DeltaBadge'
 import { KPI_ICONS } from './kpiIcons'
-import { computeCountAxis, computeNiceAxis } from './trendAxis'
+import { computeCountAxis } from './trendAxis'
 import { formatPct } from '../../mock/areas'
 import { totalOpsCount, type AreaRow } from '../../mock/assessmentResults'
 import type { Language } from '../../i18n/LanguageContext'
@@ -94,7 +94,7 @@ function CompareKpiMiniChart({
     config.format === 'percent'
       ? config.id === 'accessibility'
         ? 100
-        : Math.max(1, computeNiceAxis(numericValues).max)
+        : Math.max(1, computeCountAxis(numericValues).max)
       : computeCountAxis(numericValues).max
   const referenceValue = showGap ? values[0] : null
   const gapUnit = config.id === 'spaces' ? t.compare.gapPlacesUnit : t.compare.gapPeopleUnit

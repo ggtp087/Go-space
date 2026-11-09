@@ -9,9 +9,10 @@ import { Select } from '../components/ui/Select'
 import { YearSelect } from '../components/ui/YearSelect'
 import { AccessibilityChoropleth } from '../components/dashboard/AccessibilityChoropleth'
 import { CompareKpiGrid } from '../components/dashboard/CompareKpiGrid'
+import { ComparisonTrendChart } from '../components/dashboard/ComparisonTrendChart'
 import { DeltaBadge } from '../components/dashboard/DeltaBadge'
-import { TrendChart, type TrendSeries } from '../components/dashboard/TrendChart'
-import { computeNiceAxis } from '../components/dashboard/trendAxis'
+import { TrendChart } from '../components/dashboard/TrendChart'
+import { computeTrendYAxis } from '../components/dashboard/trendAxis'
 import { formatYear } from '../i18n/formatYear'
 import { useLanguage } from '../i18n/LanguageContext'
 import type { Language } from '../i18n/LanguageContext'
@@ -36,6 +37,7 @@ import {
 import type { Year } from '../mock/years'
 
 type Mode = 'districts' | 'years'
+type TrendValueMode = 'actual' | 'change'
 
 type ComparisonItem = {
   key: string
@@ -109,6 +111,7 @@ export function ComparePage() {
   const { level, setLevel, districtId, setDistrictId, subDistrictId, setSubDistrictId } = useArea()
 
   const [mode, setMode] = useState<Mode>('districts')
+  const [trendValueMode, setTrendValueMode] = useState<TrendValueMode>('actual')
   const [comparisonAreas, setComparisonAreas] = useState<ComparisonArea[]>(() =>
     buildInitialComparisonAreas(districtId, subDistrictId, t.map.bangkokLabel, language),
   )
@@ -216,27 +219,21 @@ export function ComparePage() {
 
   const yearsAccessSeries = getMetricSeries(yearsAreaId, 'access_pct')
   const yearsShareSeries = getMetricSeries(yearsAreaId, 'share_ops_pct')
-  const yearsShareAxis = useMemo(
-    () => computeNiceAxis(yearsShareSeries.map((point) => point.value).filter((value): value is number => value !== null)),
-    [yearsShareSeries],
+  const yearsAccessAxis = useMemo(
+    () => computeTrendYAxis(yearsAccessSeries.map((point) => point.value)),
+    [yearsAccessSeries],
   )
+  const yearsShareAxis = useMemo(() => computeTrendYAxis(yearsShareSeries.map((point) => point.value)), [yearsShareSeries])
 
   // Overlaid per-area series for the "districts" mode trend card — every
   // compared area's full 2017-2026 trajectory, in its own series color.
-  const comparisonAccessSeries: TrendSeries[] = useMemo(
-    () => comparisonAreas.map((a) => ({ points: getMetricSeries(a.id, 'access_pct'), color: a.color, label: displayName(a, language) })),
+  const comparisonAccessSeries = useMemo(
+    () => comparisonAreas.map((a) => ({ id: a.id, points: getMetricSeries(a.id, 'access_pct'), color: a.color, label: displayName(a, language) })),
     [comparisonAreas, language],
   )
-  const comparisonShareSeries: TrendSeries[] = useMemo(
-    () => comparisonAreas.map((a) => ({ points: getMetricSeries(a.id, 'share_ops_pct'), color: a.color, label: displayName(a, language) })),
+  const comparisonShareSeries = useMemo(
+    () => comparisonAreas.map((a) => ({ id: a.id, points: getMetricSeries(a.id, 'share_ops_pct'), color: a.color, label: displayName(a, language) })),
     [comparisonAreas, language],
-  )
-  const comparisonShareAxis = useMemo(
-    () =>
-      computeNiceAxis(
-        comparisonShareSeries.flatMap((s) => s.points.map((point) => point.value)).filter((value): value is number => value !== null),
-      ),
-    [comparisonShareSeries],
   )
   const highlightEntries = useMemo(() => comparisonAreas.map((a) => ({ id: a.id, color: a.color })), [comparisonAreas])
 
@@ -344,51 +341,60 @@ export function ComparePage() {
         <CompareKpiGrid items={comparisonItems} showGap={mode === 'districts'} t={t} language={language} />
       </Card>
 
-      <Card className="mt-6" title={t.compare.lineChartTitle} note={t.common.sampleDataTag}>
-        <div className="grid gap-6 sm:grid-cols-2">
+      <Card
+        className="mt-6"
+        title={t.compare.lineChartTitle}
+        note={t.common.sampleDataTag}
+        actions={
+          mode === 'districts' ? (
+            <SegmentedControl
+              value={trendValueMode}
+              onChange={(value) => setTrendValueMode(value as TrendValueMode)}
+              options={[
+                { value: 'actual', label: t.compare.trendModeActual },
+                { value: 'change', label: t.compare.trendModeChange },
+              ]}
+              fitContent
+            />
+          ) : undefined
+        }
+      >
+        <div className="space-y-8">
           <div>
-            <p className="mb-1.5 text-[12.5px] font-semibold text-ink">{t.compare.metricAccessibility}</p>
+            <p className="mb-1.5 text-[12.5px] font-semibold text-ink">{t.compare.accessibilityCaption}</p>
             {mode === 'districts' ? (
-              <TrendChart
-                series={comparisonAccessSeries}
-                selectedYears={[year]}
-                yMax={100}
-                yTicks={[0, 25, 50, 75, 100]}
-                language={language}
-                noDataLabel={t.common.noData}
-              />
+              <ComparisonTrendChart series={comparisonAccessSeries} mode={trendValueMode} selectedYear={year} language={language} t={t} height={300} />
             ) : (
               <TrendChart
                 points={yearsAccessSeries}
                 selectedYears={selectedYears}
-                yMax={100}
-                yTicks={[0, 25, 50, 75, 100]}
+                yMin={yearsAccessAxis.min}
+                yMax={yearsAccessAxis.max}
+                yTicks={yearsAccessAxis.ticks}
                 color="var(--color-green-600)"
                 language={language}
                 noDataLabel={t.common.noData}
+                axisNote={t.dashboard.trend.axisNote}
+                height={300}
               />
             )}
           </div>
           <div>
-            <p className="mb-1.5 text-[12.5px] font-semibold text-ink">{t.map.openSpaceShareLabel}</p>
+            <p className="mb-1.5 text-[12.5px] font-semibold text-ink">{t.compare.metricOpsShare}</p>
             {mode === 'districts' ? (
-              <TrendChart
-                series={comparisonShareSeries}
-                selectedYears={[year]}
-                yMax={comparisonShareAxis.max}
-                yTicks={comparisonShareAxis.ticks}
-                language={language}
-                noDataLabel={t.common.noData}
-              />
+              <ComparisonTrendChart series={comparisonShareSeries} mode={trendValueMode} selectedYear={year} language={language} t={t} height={300} />
             ) : (
               <TrendChart
                 points={yearsShareSeries}
                 selectedYears={selectedYears}
+                yMin={yearsShareAxis.min}
                 yMax={yearsShareAxis.max}
                 yTicks={yearsShareAxis.ticks}
                 color="var(--color-accent-600)"
                 language={language}
                 noDataLabel={t.common.noData}
+                axisNote={t.dashboard.trend.axisNote}
+                height={300}
               />
             )}
           </div>

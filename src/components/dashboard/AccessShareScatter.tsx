@@ -1,4 +1,5 @@
 import { formatPct, roundPct } from '../../mock/areas'
+import { estimateLabelBox, labelBoxesOverlap, type LabelBox } from '../map/labelPlacement'
 import { computeTrendYAxis } from './trendAxis'
 import { useChartWidth } from './useChartWidth'
 
@@ -6,7 +7,7 @@ type AccessShareScatterRow = { id: string; name: string; access_pct: number; sha
 
 type AccessShareScatterProps = {
   rows: AccessShareScatterRow[]
-  /** Ids currently shown by the control bar — get full opacity; everything else dims. Undefined (or containing every row) highlights all. */
+  /** Ids currently shown by the control bar — get full opacity and a name label; everything else dims and is name-only on hover. Undefined (or containing every row) highlights all. */
   highlightIds?: Set<string>
   selectedId?: string
   quadrantLabels: { highHigh: string; highLow: string; lowHigh: string; lowLow: string }
@@ -22,14 +23,71 @@ type AccessShareScatterProps = {
 const MARGIN = { top: 28, right: 20, bottom: 40, left: 46 }
 const MIN_RADIUS = 6
 const MAX_RADIUS = 18
-// Past this many points, per-dot name labels turn into visual noise — the
-// hover tooltip still gives every area's exact name and numbers.
+// Past this many highlighted points, per-dot name labels turn into visual
+// noise — the hover tooltip still gives every area's exact name and
+// numbers. Gated on the HIGHLIGHTED count, not the total row count, so
+// switching the control bar's "Show" to a small number always labels those
+// points regardless of how many unhighlighted dots also happen to be
+// plotted in the background.
 const MAX_LABELED_POINTS = 15
+
+type PlottedPoint = { id: string; cx: number; cy: number; r: number }
+type LabelPlacement = { x: number; y: number; anchor: 'start' | 'end' }
 
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+}
+
+/**
+ * One label per highlighted point, nudged to the first of a few candidate
+ * spots (right, upper-right, lower-right, then the same on the left) that
+ * doesn't collide with an already-placed label — bigger bubbles (more
+ * population) get first pick of their preferred spot. Falls back to the
+ * first candidate (silently accepting the overlap) only when every spot
+ * collides, which the small highlighted-point cap above keeps rare.
+ */
+function placePointLabels(points: (PlottedPoint & { text: string })[]): Map<string, LabelPlacement> {
+  const placements = new Map<string, LabelPlacement>()
+  const placedBoxes: LabelBox[] = []
+  const ordered = [...points].sort((a, b) => b.r - a.r)
+  for (const point of ordered) {
+    const { width, height } = estimateLabelBox(point.text, 10)
+    const candidates: LabelPlacement[] = [
+      { x: point.cx + point.r + 4, y: point.cy + 3, anchor: 'start' },
+      { x: point.cx + point.r + 4, y: point.cy - point.r - 3, anchor: 'start' },
+      { x: point.cx + point.r + 4, y: point.cy + point.r + 11, anchor: 'start' },
+      { x: point.cx - point.r - 4, y: point.cy + 3, anchor: 'end' },
+      { x: point.cx - point.r - 4, y: point.cy - point.r - 3, anchor: 'end' },
+    ]
+    let chosen = candidates[0]
+    for (const candidate of candidates) {
+      const boxCenterX = candidate.anchor === 'start' ? candidate.x + width / 2 : candidate.x - width / 2
+      const box: LabelBox = { x: boxCenterX, y: candidate.y, width, height }
+      if (!placedBoxes.some((placed) => labelBoxesOverlap(placed, box))) {
+        chosen = candidate
+        placedBoxes.push(box)
+        break
+      }
+      if (candidate === candidates[candidates.length - 1]) placedBoxes.push(box)
+    }
+    placements.set(point.id, chosen)
+  }
+  return placements
+}
+
+/** Nudges a quadrant label further toward its own quadrant's outer corner (away from the median lines, never across them) while it still sits on top of a plotted point — so it stays inside its quadrant, just not necessarily at the exact geometric midpoint. */
+function nudgeQuadrantLabel(x: number, y: number, dirX: number, dirY: number, points: PlottedPoint[]): { x: number; y: number } {
+  let px = x
+  let py = y
+  for (let step = 0; step < 4; step++) {
+    const collides = points.some((p) => Math.hypot(px - p.cx, py - p.cy) < p.r + 10)
+    if (!collides) return { x: px, y: py }
+    px += dirX * 16
+    py += dirY * 10
+  }
+  return { x: px, y: py }
 }
 
 /**
@@ -49,7 +107,7 @@ export function AccessShareScatter({
   populationLabel,
   medianLabelTemplate,
   axisNote,
-  height = 320,
+  height = 460,
 }: AccessShareScatterProps) {
   const { ref, width } = useChartWidth(600)
   const plotWidth = width - MARGIN.left - MARGIN.right
@@ -67,16 +125,40 @@ export function AccessShareScatter({
   const maxPopulation = Math.max(...rows.map((r) => r.total_population), 1)
   const radiusFor = (population: number) => MIN_RADIUS + Math.sqrt(Math.max(population, 0) / maxPopulation) * (MAX_RADIUS - MIN_RADIUS)
 
-  const showPointLabels = rows.length > 0 && rows.length <= MAX_LABELED_POINTS
+  const plottedPoints: PlottedPoint[] = rows.map((row) => ({
+    id: row.id,
+    cx: xAt(row.share_ops_pct),
+    cy: yAt(row.access_pct),
+    r: radiusFor(row.total_population),
+  }))
+  const plottedById = new Map(plottedPoints.map((p) => [p.id, p]))
+
+  const highlightedRows = rows.filter((row) => !highlightIds || highlightIds.has(row.id))
+  const showPointLabels = highlightedRows.length > 0 && highlightedRows.length <= MAX_LABELED_POINTS
+  const labelPlacements = showPointLabels
+    ? placePointLabels(
+        highlightedRows.map((row) => {
+          const point = plottedById.get(row.id)!
+          return { ...point, text: row.name.length > 16 ? `${row.name.slice(0, 15)}…` : row.name }
+        }),
+      )
+    : new Map<string, LabelPlacement>()
+
   const showAxisNote = axisNote && (xAxis.min > 0 || yAxis.min > 0)
 
   // Quadrant labels sit at the horizontal midpoint between the median line
   // and the plot's own edge (not the fixed corner, and not hugging the
-  // median line itself — that overlapped when the median sat near an edge).
+  // median line itself — that overlapped when the median sat near an edge),
+  // then nudged further toward their own outer corner if a point is
+  // directly underneath.
   const xMidLeft = (MARGIN.left + xAt(medianX)) / 2
   const xMidRight = (xAt(medianX) + (width - MARGIN.right)) / 2
   const yTop = MARGIN.top + 14
   const yBottom = height - MARGIN.bottom - 8
+  const highHighPos = nudgeQuadrantLabel(xMidRight, yTop, 1, -1, plottedPoints)
+  const lowHighPos = nudgeQuadrantLabel(xMidLeft, yTop, -1, -1, plottedPoints)
+  const highLowPos = nudgeQuadrantLabel(xMidRight, yBottom, 1, 1, plottedPoints)
+  const lowLowPos = nudgeQuadrantLabel(xMidLeft, yBottom, -1, 1, plottedPoints)
 
   return (
     <div>
@@ -120,15 +202,14 @@ export function AccessShareScatter({
           {rows.map((row) => {
             const isHighlighted = !highlightIds || highlightIds.has(row.id)
             const isSelected = row.id === selectedId
-            const cx = xAt(row.share_ops_pct)
-            const cy = yAt(row.access_pct)
-            const r = radiusFor(row.total_population)
+            const point = plottedById.get(row.id)!
+            const placement = labelPlacements.get(row.id)
             return (
               <g key={row.id}>
                 <circle
-                  cx={cx}
-                  cy={cy}
-                  r={r}
+                  cx={point.cx}
+                  cy={point.cy}
+                  r={point.r}
                   fill="var(--color-green-600)"
                   fillOpacity={isSelected ? 0.85 : isHighlighted ? 0.5 : 0.12}
                   stroke={isSelected ? 'var(--color-ink)' : 'var(--color-green-700)'}
@@ -140,8 +221,8 @@ export function AccessShareScatter({
                     {Math.round(row.total_population).toLocaleString()}
                   </title>
                 </circle>
-                {showPointLabels && isHighlighted && (
-                  <text x={cx + r + 4} y={cy + 3} fontSize="10" fill="var(--color-slate)" opacity={isSelected ? 1 : 0.8}>
+                {placement && (
+                  <text x={placement.x} y={placement.y} textAnchor={placement.anchor} fontSize="10" fill="var(--color-slate)" opacity={isSelected ? 1 : 0.8}>
                     {row.name.length > 16 ? `${row.name.slice(0, 15)}…` : row.name}
                   </text>
                 )}
@@ -177,16 +258,16 @@ export function AccessShareScatter({
             {medianLabelTemplate.replace('{value}', roundPct(medianY).toFixed(1))}
           </text>
 
-          <text x={xMidRight} y={yTop} textAnchor="middle" fontSize="11" fill="var(--color-mist)" stroke="var(--color-card)" strokeWidth={3} paintOrder="stroke">
+          <text x={highHighPos.x} y={highHighPos.y} textAnchor="middle" fontSize="11" fill="var(--color-mist)" stroke="var(--color-card)" strokeWidth={3} paintOrder="stroke">
             {quadrantLabels.highHigh}
           </text>
-          <text x={xMidLeft} y={yTop} textAnchor="middle" fontSize="11" fill="var(--color-mist)" stroke="var(--color-card)" strokeWidth={3} paintOrder="stroke">
+          <text x={lowHighPos.x} y={lowHighPos.y} textAnchor="middle" fontSize="11" fill="var(--color-mist)" stroke="var(--color-card)" strokeWidth={3} paintOrder="stroke">
             {quadrantLabels.lowHigh}
           </text>
-          <text x={xMidRight} y={yBottom} textAnchor="middle" fontSize="11" fill="var(--color-mist)" stroke="var(--color-card)" strokeWidth={3} paintOrder="stroke">
+          <text x={highLowPos.x} y={highLowPos.y} textAnchor="middle" fontSize="11" fill="var(--color-mist)" stroke="var(--color-card)" strokeWidth={3} paintOrder="stroke">
             {quadrantLabels.highLow}
           </text>
-          <text x={xMidLeft} y={yBottom} textAnchor="middle" fontSize="11" fill="var(--color-mist)" stroke="var(--color-card)" strokeWidth={3} paintOrder="stroke">
+          <text x={lowLowPos.x} y={lowLowPos.y} textAnchor="middle" fontSize="11" fill="var(--color-mist)" stroke="var(--color-card)" strokeWidth={3} paintOrder="stroke">
             {quadrantLabels.lowLow}
           </text>
         </svg>

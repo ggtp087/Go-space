@@ -1,19 +1,4 @@
-/**
- * A "nice" axis max and 5 evenly-spaced ticks (0/25/50/75/100% of that max),
- * comfortably above the series' own data, starting at 0 — for bar charts,
- * where the baseline must be 0 or the bars themselves would mislead.
- */
-export function computeNiceAxis(values: number[]): { max: number; ticks: number[] } {
-  const dataMax = values.length ? Math.max(...values) : 0
-  const candidates = [2, 5, 10, 15, 20, 25, 30, 40, 50, 75, 100]
-  const max = candidates.find((c) => c >= dataMax * 1.15) ?? Math.ceil((dataMax * 1.15) / 10) * 10
-  const decimals = max <= 10 ? 1 : 0
-  const factor = 10 ** decimals
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((fraction) => Math.round(max * fraction * factor) / factor)
-  return { max, ticks }
-}
-
-/** Rounds to a "nice" 1/2/5-times-a-power-of-10 number — the building block both axis helpers below use for tick spacing. */
+/** Rounds to a "nice" 1/2/5-times-a-power-of-10 number — the building block every axis helper below uses for tick spacing. */
 export function niceNumber(value: number, round: boolean): number {
   if (value <= 0) return 1
   const exponent = Math.floor(Math.log10(value))
@@ -38,6 +23,16 @@ export function niceNumber(value: number, round: boolean): number {
  * range (not forced to start at 0), so year-to-year movement is actually
  * visible instead of reading as flat against a 0–100 scale. Clamped to
  * [0, 100] since both accessibility and OPS share are percentages.
+ *
+ * Picks the tick step from the data's own (unpadded) range, then floors/
+ * ceils the data extent to that step — not the other way around (pick a
+ * "nice" max first, then pad down to a tick boundary), which could floor
+ * `min` all the way down to 0 whenever the padded value landed below one
+ * tick step above zero, silently cancelling the zoom (e.g. data 4–14 with
+ * a tick step of 5 padded down to 1, which floors to 0). Flooring/ceiling
+ * the real data extent instead can't collapse that way, and still gives up
+ * to one tick step of padding on each side whenever the extent doesn't
+ * already land exactly on a tick.
  */
 export function computeTrendYAxis(values: (number | null)[], tickCount = 5): { min: number; max: number; ticks: number[] } {
   const finiteValues = values.filter((v): v is number => v !== null && Number.isFinite(v))
@@ -46,30 +41,48 @@ export function computeTrendYAxis(values: (number | null)[], tickCount = 5): { m
   const dataMin = Math.min(...finiteValues)
   const dataMax = Math.max(...finiteValues)
   const dataRange = Math.max(dataMax - dataMin, 1)
-  const padding = dataRange * 0.3
+  const step = niceNumber(dataRange / (tickCount - 1), true)
 
-  const rawMin = Math.max(0, dataMin - padding)
-  const rawMax = Math.min(100, dataMax + padding)
-  const niceRange = niceNumber(Math.max(rawMax - rawMin, 1), false)
-  const tickSpacing = niceNumber(niceRange / (tickCount - 1), true)
-
-  const min = Math.max(0, Math.floor(rawMin / tickSpacing) * tickSpacing)
-  const max = Math.min(100, Math.ceil(rawMax / tickSpacing) * tickSpacing)
+  const min = Math.max(0, Math.floor(dataMin / step) * step)
+  const max = Math.min(100, Math.ceil(dataMax / step) * step)
 
   const ticks: number[] = []
-  for (let v = min; v <= max + tickSpacing * 0.001; v += tickSpacing) ticks.push(Math.round(v * 100) / 100)
+  for (let v = min; v <= max + step * 0.001; v += step) ticks.push(Math.round(v * 100) / 100)
   return { min, max, ticks }
 }
 
 /**
- * A 0-based "nice" axis for an arbitrary-magnitude count (e.g. population),
- * unlike computeTrendYAxis which is clamped to a 0–100 percentage.
- *
- * Uses niceNumber's `round: false` (ceiling) mode for the tick spacing, not
- * `true` (nearest) — nearest can round DOWN (e.g. a fraction of 1.4 rounds
- * to 1), which made `max` sometimes land below the padded data max, and
- * occasionally even below the data itself, overflowing the tallest bar
- * past the plot area.
+ * Same "nice"-tick zoom as computeTrendYAxis, for SIGNED values (e.g. a
+ * percentage-point change series) — always includes 0 (the "no change"
+ * reference line), and isn't clamped to a non-negative 0–100 range the way
+ * computeTrendYAxis is, since a change can go negative.
+ */
+export function computeSignedAxis(values: (number | null)[], tickCount = 5): { min: number; max: number; ticks: number[] } {
+  const finiteValues = values.filter((v): v is number => v !== null && Number.isFinite(v))
+  const dataMin = Math.min(0, ...finiteValues)
+  const dataMax = Math.max(0, ...finiteValues)
+  if (finiteValues.length === 0 || dataMin === dataMax) {
+    return { min: -1, max: 1, ticks: [-1, -0.5, 0, 0.5, 1] }
+  }
+  const dataRange = Math.max(dataMax - dataMin, 1)
+  const step = niceNumber(dataRange / (tickCount - 1), true)
+
+  const min = Math.floor(dataMin / step) * step
+  const max = Math.ceil(dataMax / step) * step
+
+  const ticks: number[] = []
+  for (let v = min; v <= max + step * 0.001; v += step) ticks.push(Math.round(v * 100) / 100)
+  return { min, max, ticks }
+}
+
+/**
+ * A 0-based "nice" axis for an arbitrary-magnitude count or percentage (e.g.
+ * population, or an OPS-share bar axis) — tick step picked first (from the
+ * data's own padded range), then the axis max derived as an exact multiple
+ * of it, so the ticks can never land unevenly the way dividing a chosen max
+ * into quarters could (e.g. a max of 15 splitting into 0/3.75/7.5/11.25/15,
+ * which only reads as "nice" before each quarter gets rounded to a whole
+ * number — 0/4/8/11/15).
  */
 export function computeCountAxis(values: number[], tickCount = 5): { max: number; ticks: number[] } {
   const dataMax = values.length ? Math.max(...values) : 0

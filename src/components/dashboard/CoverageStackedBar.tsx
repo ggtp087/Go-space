@@ -4,8 +4,11 @@ import { useChartWidth } from './useChartWidth'
 
 type CoverageStackedBarRow = { id: string; name: string; total_population: number; population_with_access: number }
 
+export type CoverageMode = 'count' | 'share'
+
 type CoverageStackedBarProps = {
   rows: CoverageStackedBarRow[]
+  mode: CoverageMode
   selectedId?: string
   coveredLabel: string
   notCoveredLabel: string
@@ -18,7 +21,8 @@ const MARGIN = { top: 20, right: 14, bottom: 34, left: 48 }
 // Below this many px per bar, columns start cramming into each other —
 // past that point the chart grows wider than its card and scrolls
 // horizontally instead, rather than squeezing bars/labels unreadably thin.
-const MIN_BAR_STEP = 64
+const MIN_BAR_STEP = 72
+const BAR_WIDTH_FRACTION = 0.65
 
 /** "1,200,000" → "1.2M", "450,000" → "450K" — axis labels stay short regardless of the city's real population scale; the hover tooltip still gives the exact figure. */
 function formatCompactCount(value: number): string {
@@ -33,17 +37,25 @@ function formatCompactCount(value: number): string {
   return String(Math.round(value))
 }
 
-/** Stacked population bars (covered vs. not covered), one per area — an absolute-numbers counterpart to the ranking chart's percentages, so a small-population area with high access and a large-population area with low access don't look the same. */
-export function CoverageStackedBar({ rows, selectedId, coveredLabel, notCoveredLabel, populationLabel, height = 240 }: CoverageStackedBarProps) {
+/**
+ * Stacked population bars (covered vs. not covered), one per area — an
+ * absolute-numbers counterpart to the ranking chart's percentages, so a
+ * small-population area with high access and a large-population area with
+ * low access don't look the same. 'share' mode re-bases every bar to a
+ * common 0–100% height (split by its own covered/not-covered split) instead
+ * of its real population, so a small area (e.g. a sub-district a fraction
+ * of Bangkok Noi's size) reads exactly as clearly as the largest one.
+ */
+export function CoverageStackedBar({ rows, mode, selectedId, coveredLabel, notCoveredLabel, populationLabel, height = 380 }: CoverageStackedBarProps) {
   const { ref, width: availableWidth } = useChartWidth(600)
   const minRequiredWidth = MARGIN.left + MARGIN.right + rows.length * MIN_BAR_STEP
   const width = Math.max(availableWidth, minRequiredWidth)
 
-  const axis = computeCountAxis(rows.map((row) => row.total_population))
+  const axis = mode === 'count' ? computeCountAxis(rows.map((row) => row.total_population)) : { max: 100, ticks: [0, 25, 50, 75, 100] }
   const plotWidth = width - MARGIN.left - MARGIN.right
   const plotHeight = height - MARGIN.top - MARGIN.bottom
   const stepX = rows.length > 0 ? plotWidth / rows.length : plotWidth
-  const barWidth = Math.min(40, stepX * 0.6)
+  const barWidth = Math.max(32, stepX * BAR_WIDTH_FRACTION)
 
   const xAt = (index: number) => MARGIN.left + index * stepX + stepX / 2
   const yAt = (value: number) => MARGIN.top + plotHeight - (value / axis.max) * plotHeight
@@ -67,7 +79,7 @@ export function CoverageStackedBar({ rows, selectedId, coveredLabel, notCoveredL
             <g key={tick}>
               <line x1={MARGIN.left} x2={width - MARGIN.right} y1={yAt(tick)} y2={yAt(tick)} stroke="var(--color-line)" strokeWidth={1} />
               <text x={MARGIN.left - 6} y={yAt(tick) + 3} textAnchor="end" fontSize="12" fill="var(--color-mist)">
-                {formatCompactCount(tick)}
+                {mode === 'count' ? formatCompactCount(tick) : `${tick}%`}
               </text>
             </g>
           ))}
@@ -75,6 +87,11 @@ export function CoverageStackedBar({ rows, selectedId, coveredLabel, notCoveredL
           {rows.map((row, index) => {
             const notCovered = row.total_population - row.population_with_access
             const coveredPctText = row.total_population > 0 ? formatPct((row.population_with_access / row.total_population) * 100) : formatPct(0)
+            // 'count' mode plots the real population split; 'share' mode
+            // re-bases every bar to the same 0–100 axis, at that area's own
+            // covered/not-covered percentage split.
+            const barTotal = mode === 'count' ? row.total_population : 100
+            const barCovered = mode === 'count' ? row.population_with_access : row.total_population > 0 ? (row.population_with_access / row.total_population) * 100 : 0
             const x = xAt(index) - barWidth / 2
             const isSelected = row.id === selectedId
             const tooltip = [
@@ -88,25 +105,13 @@ export function CoverageStackedBar({ rows, selectedId, coveredLabel, notCoveredL
                 {isSelected && (
                   <rect x={xAt(index) - stepX / 2} y={MARGIN.top} width={stepX} height={plotHeight} fill="var(--color-green-50)" />
                 )}
-                <rect
-                  x={x}
-                  y={yAt(row.population_with_access)}
-                  width={barWidth}
-                  height={plotHeight - (yAt(row.population_with_access) - MARGIN.top)}
-                  fill="var(--color-green-600)"
-                >
+                <rect x={x} y={yAt(barCovered)} width={barWidth} height={plotHeight - (yAt(barCovered) - MARGIN.top)} fill="var(--color-green-600)">
                   <title>{tooltip}</title>
                 </rect>
-                <rect
-                  x={x}
-                  y={yAt(row.total_population)}
-                  width={barWidth}
-                  height={yAt(row.population_with_access) - yAt(row.total_population)}
-                  fill="var(--color-mist-2)"
-                >
+                <rect x={x} y={yAt(barTotal)} width={barWidth} height={yAt(barCovered) - yAt(barTotal)} fill="var(--color-mist-2)">
                   <title>{tooltip}</title>
                 </rect>
-                <text x={xAt(index)} y={yAt(row.total_population) - 6} textAnchor="middle" fontSize="12" fontWeight={700} fill="var(--color-ink)">
+                <text x={xAt(index)} y={yAt(barTotal) - 6} textAnchor="middle" fontSize="12" fontWeight={700} fill="var(--color-ink)">
                   {coveredPctText}
                 </text>
                 <text

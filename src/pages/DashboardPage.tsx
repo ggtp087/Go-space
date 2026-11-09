@@ -3,18 +3,19 @@ import { Card } from '../components/ui/Card'
 import { DataTable, type DataTableColumn } from '../components/ui/DataTable'
 import { Input } from '../components/ui/Input'
 import { KpiCard } from '../components/ui/KpiCard'
+import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
 import { YearSelect } from '../components/ui/YearSelect'
 import { AccessibilityChoropleth } from '../components/dashboard/AccessibilityChoropleth'
 import { AccessShareScatter } from '../components/dashboard/AccessShareScatter'
-import { CoverageStackedBar } from '../components/dashboard/CoverageStackedBar'
+import { CoverageStackedBar, type CoverageMode } from '../components/dashboard/CoverageStackedBar'
 import { DeltaBadge } from '../components/dashboard/DeltaBadge'
 import { DeltaBarChart } from '../components/dashboard/DeltaBarChart'
 import { KPI_ICONS } from '../components/dashboard/kpiIcons'
 import { RankingBarChart } from '../components/dashboard/RankingBarChart'
 import { Sparkline } from '../components/dashboard/Sparkline'
 import { TrendChart, type TrendChartPoint } from '../components/dashboard/TrendChart'
-import { computeCountAxis, computeTrendYAxis, computeNiceAxis } from '../components/dashboard/trendAxis'
+import { computeCountAxis, computeTrendYAxis } from '../components/dashboard/trendAxis'
 import { formatYear } from '../i18n/formatYear'
 import { formatAreaSqKm } from '../i18n/formatArea'
 import type { Language } from '../i18n/LanguageContext'
@@ -499,6 +500,7 @@ export function DashboardPage() {
   const [order, setOrder] = useState<Order>('desc')
   const [tableNameSort, setTableNameSort] = useState(false)
   const [search, setSearch] = useState('')
+  const [coverageMode, setCoverageMode] = useState<CoverageMode>('count')
 
   function resetControls() {
     setLimit('10')
@@ -565,7 +567,7 @@ export function DashboardPage() {
 
   const rankingValues = limitedRows.map((row) => metricValue(row, metric))
   const rankingIsPercent = isPercentMetric(metric)
-  const rankingAxis = metric === 'access_pct' ? { max: 100, ticks: [0, 25, 50, 75, 100] } : metric === 'share_ops_pct' ? computeNiceAxis(rankingValues) : computeCountAxis(rankingValues)
+  const rankingAxis = metric === 'access_pct' ? { max: 100, ticks: [0, 25, 50, 75, 100] } : computeCountAxis(rankingValues)
   const rankingFormatValue = rankingIsPercent ? formatPct : (value: number) => Math.round(value).toLocaleString()
   const rankingBarColor = metric === 'access_pct' ? accessibilityColor : () => NEUTRAL_METRIC_COLOR
   const rankingReference = computeMetricReference(metric, scopedRows, scopeLabel, isWholeCity, t)
@@ -854,9 +856,21 @@ export function DashboardPage() {
                 title={t.dashboard.charts.coverageTitle}
                 subtitle={t.dashboard.charts.coverageSubtitle}
                 note={t.common.sampleDataTag}
+                actions={
+                  <SegmentedControl
+                    value={coverageMode}
+                    onChange={(value) => setCoverageMode(value as CoverageMode)}
+                    options={[
+                      { value: 'count', label: t.dashboard.charts.coverageModeCount },
+                      { value: 'share', label: t.dashboard.charts.coverageModeShare },
+                    ]}
+                    fitContent
+                  />
+                }
               >
                 <CoverageStackedBar
                   rows={limitedRows}
+                  mode={coverageMode}
                   selectedId={selectedId}
                   coveredLabel={t.dashboard.charts.coveredLabel}
                   notCoveredLabel={t.dashboard.charts.notCoveredLabel}
