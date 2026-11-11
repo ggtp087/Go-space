@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { getSeriesTextColor } from '../../config/mapStyle'
 import { formatYear } from '../../i18n/formatYear'
 import type { Language } from '../../i18n/LanguageContext'
 import type { Strings } from '../../i18n/strings'
@@ -222,7 +223,7 @@ export function ComparisonTrendChart({ series, mode, selectedYear, language, t, 
               )}
 
               {endLabels.map((l) => (
-                <text key={l.id} x={xAt(years.length - 1) + 8} y={l.y + 3} fontSize="11" fontWeight={700} fill={l.color}>
+                <text key={l.id} x={xAt(years.length - 1) + 8} y={l.y + 3} fontSize="11" fontWeight={700} fill={getSeriesTextColor(l.color)}>
                   {l.label} {formatValue(l.value)}
                 </text>
               ))}

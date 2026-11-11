@@ -49,9 +49,9 @@ type AccessibilityChoroplethProps = {
    */
   interactive?: boolean
   onSelectArea?: (id: string) => void
-  /** Non-empty set: every area NOT in it is faded — the Dashboard legend's "highlight this class" toggle. null/undefined: no fade. Takes priority over `selectionIds` when both are set. */
+  /** Non-empty set: areas in it get the thicker dark outline — the Dashboard legend's "highlight this class" toggle. Fills are never faded. Takes priority over `selectionIds` when both are set. */
   highlightIds?: Set<string> | null
-  /** Non-empty set (and `highlightIds` not active): areas in it get a thicker dark outline (the ranking chart's current row set); areas outside it fade slightly. null/undefined: no effect. */
+  /** Non-empty set (and `highlightIds` not active): areas in it get a thicker dark outline (the ranking chart's current row set). Fills are never faded. null/undefined: no effect. */
   selectionIds?: Set<string> | null
   /** Fit bounds to these areas' own combined extent instead of districtId's — for Compare's map, which must frame every compared area (possibly a mix of levels), not just one district/city scope. */
   fitToIds?: string[]
@@ -180,32 +180,25 @@ export function AccessibilityChoropleth({
     }))
   }, [isWholeCity, districtId])
 
-  const bandActive = !!highlightIds && highlightIds.size > 0
-  const selectionActive = !bandActive && !!selectionIds && selectionIds.size > 0
+  // Fills never change with a legend-class click or the ranking selection —
+  // emphasis is only the thicker dark outline, drawn as its own stroke-only
+  // layer above every fill so a neighbor's boundary can't paint over it.
+  // A clicked legend class takes priority over the ranking selection.
+  const emphasisIds = highlightIds && highlightIds.size > 0 ? highlightIds : selectionIds && selectionIds.size > 0 ? selectionIds : null
+  const emphasisFeatureCollection = useMemo<FeatureCollection<Polygon | MultiPolygon, { id: string }> | null>(
+    () => (emphasisIds ? { type: 'FeatureCollection', features: areaFeatureCollection.features.filter((f) => emphasisIds.has(f.properties.id)) } : null),
+    [areaFeatureCollection, emphasisIds],
+  )
+  const emphasisKey = emphasisFeatureCollection?.features.map((f) => f.properties.id).join(',') ?? ''
 
   const areaStyle = useMemo(
     () =>
       (feature?: Feature<Geometry, { id: string }>) => {
         if (!feature) return {}
-        const id = feature.properties.id
-        const stats = getAssessmentResult(id, year)
-        const fillColor = getAccessibilityColor(stats?.access_pct ?? 0)
-        if (bandActive) {
-          const isFaded = !highlightIds!.has(id)
-          return getChoroplethStyle(fillColor, { interactive, fillOpacity: isFaded ? 0.15 : 0.85 })
-        }
-        if (selectionActive) {
-          const inSelection = selectionIds!.has(id)
-          return getChoroplethStyle(fillColor, {
-            interactive,
-            fillOpacity: inSelection ? 0.85 : 0.45,
-            weight: inSelection ? SELECTION_OUTLINE_WEIGHT : undefined,
-            color: inSelection ? SELECTION_OUTLINE_COLOR : undefined,
-          })
-        }
-        return getChoroplethStyle(fillColor, { interactive, fillOpacity: 0.85 })
+        const stats = getAssessmentResult(feature.properties.id, year)
+        return getChoroplethStyle(getAccessibilityColor(stats?.access_pct ?? 0), { interactive })
       },
-    [year, interactive, bandActive, highlightIds, selectionActive, selectionIds],
+    [year, interactive],
   )
 
   // Tooltip binding + click handling are set up once per GeoJSON mount (not
@@ -246,6 +239,8 @@ export function AccessibilityChoropleth({
       <MapContainer
         center={[13.7563, 100.5018]}
         zoom={10}
+        zoomSnap={0.25}
+        zoomDelta={0.5}
         zoomControl
         scrollWheelZoom={false}
         doubleClickZoom
@@ -262,10 +257,19 @@ export function AccessibilityChoropleth({
             onEachFeature={onEachFeature}
           />
         </Pane>
-        <Pane name="choropleth-highlight-pane" style={{ zIndex: 402, pointerEvents: 'none' }}>
+        <Pane name="choropleth-emphasis-pane" style={{ zIndex: 402, pointerEvents: 'none' }}>
+          {emphasisFeatureCollection && (
+            <GeoJSON
+              key={`${level}-${districtId}-${emphasisKey}`}
+              data={emphasisFeatureCollection}
+              style={{ color: SELECTION_OUTLINE_COLOR, weight: SELECTION_OUTLINE_WEIGHT, fill: false, interactive: false }}
+            />
+          )}
+        </Pane>
+        <Pane name="choropleth-highlight-pane" style={{ zIndex: 403, pointerEvents: 'none' }}>
           {highlightFeature && <GeoJSON key={highlightFeature.properties.id} data={highlightFeature} style={getChoroplethSelectionStyle()} />}
         </Pane>
-        <Pane name="choropleth-multi-highlight-pane" style={{ zIndex: 403, pointerEvents: 'none' }}>
+        <Pane name="choropleth-multi-highlight-pane" style={{ zIndex: 404, pointerEvents: 'none' }}>
           {highlights?.map((highlight) => {
             const feature = resolveAreaFeature(highlight.id)
             if (!feature) return null
@@ -277,7 +281,7 @@ export function AccessibilityChoropleth({
             )
           })}
         </Pane>
-        <Pane name="choropleth-labels-pane" style={{ zIndex: 404, pointerEvents: 'none' }}>
+        <Pane name="choropleth-labels-pane" style={{ zIndex: 405, pointerEvents: 'none' }}>
           <ChoroplethLabels features={labelFeatures} tier={level} language={language} />
         </Pane>
         <FitBoundsOnChange latLngs={fitLatLngs} />
@@ -285,6 +289,12 @@ export function AccessibilityChoropleth({
     </div>
   )
 }
+
+// Fractional zoom (MapContainer's zoomSnap 0.25) lets fitBounds fill the box
+// instead of dropping a whole level whenever the next one would overflow.
+// Fits are instant: an animated fit that a ResizeObserver refit interrupts
+// mid-zoom can settle at the wrong (too far out) zoom.
+const FIT_PADDING: [number, number] = [16, 16]
 
 /**
  * Imperatively re-fits the map whenever the target area changes —
@@ -306,14 +316,14 @@ function FitBoundsOnChange({ latLngs }: { latLngs: LatLngTuple[] }) {
   useEffect(() => {
     latLngsRef.current = latLngs
     map.invalidateSize()
-    map.fitBounds(latLngs, { padding: [24, 24] })
+    map.fitBounds(latLngs, { padding: FIT_PADDING, animate: false })
   }, [map, latLngs])
 
   useEffect(() => {
     const container = map.getContainer()
     const observer = new ResizeObserver(() => {
       map.invalidateSize()
-      map.fitBounds(latLngsRef.current, { padding: [24, 24] })
+      map.fitBounds(latLngsRef.current, { padding: FIT_PADDING, animate: false })
     })
     observer.observe(container)
     return () => observer.disconnect()

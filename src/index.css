@@ -24,11 +24,11 @@
   --color-accent-50: #fdf5ea;
 
   /* Accessibility choropleth scale, low → high */
-  --color-scale-1: #d9822b;
-  --color-scale-2: #e4b064;
-  --color-scale-3: #d8d3a0;
-  --color-scale-4: #7fb88f;
-  --color-scale-5: #2a7a54;
+  --color-scale-1: #b5401a;
+  --color-scale-2: #eb8a48;
+  --color-scale-3: #f4e78e;
+  --color-scale-4: #8fd0b0;
+  --color-scale-5: #0d5538;
 
   --color-ink: #182019;
   --color-slate: #4e5a52;

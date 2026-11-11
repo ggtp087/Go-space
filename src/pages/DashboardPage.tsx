@@ -397,7 +397,7 @@ export function DashboardPage() {
   const brackets = getAccessibilityBrackets(scopedRows)
 
   // The choropleth legend's own clickable-class toggle: clicking a bracket
-  // row highlights only its areas on the map (others faded); click again
+  // row outlines its areas on the map (fills unchanged); click again
   // (or change scope) to clear.
   const [activeBandLabel, setActiveBandLabel] = useState<string | null>(null)
   // Resetting state when a prop changes, done during render (not in an

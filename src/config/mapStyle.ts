@@ -156,21 +156,63 @@ export const mapStyle = {
 // palette change never needs touching more than this line. No purple (too
 // close to blue at outline weight) and no red (the map's selection color).
 // The 5th, a dark gold rather than a light yellow, still needs its own
-// handling against light fills — see getColoredHighlightStyle's halo.
+// handling against light fills — see getColoredHighlightStyle's halo — and,
+// like the teal, a darker shade when used as text (getSeriesTextColor).
 export const comparisonPalette = ['#2563EB', '#DB2777', '#0D9488', '#8C564B', '#CA8A04']
+
+function relativeLuminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+function contrastOnWhite(hex: string): number {
+  return 1.05 / (relativeLuminance(hex) + 0.05)
+}
+
+// Hand-picked darker text shades (Tailwind 700s) for the comparisonPalette
+// colors that fall below 4.5:1 on white — gold ≈2.9:1, teal ≈3.7:1.
+const seriesTextShades: Record<string, string> = { '#CA8A04': '#A16207', '#0D9488': '#0F766E' }
+
+/**
+ * The color to draw a series' own text label in (e.g. trend-chart end
+ * labels): the series color itself when it reads at ≥4.5:1 on white,
+ * otherwise a darker shade of the same hue. Text only — lines, chips, bars
+ * and map outlines keep the palette color.
+ */
+export function getSeriesTextColor(hex: string): string {
+  if (contrastOnWhite(hex) >= 4.5) return hex
+  const shade = seriesTextShades[hex.toUpperCase()]
+  if (shade) return shade
+  // Any other color: scale toward black until it passes.
+  const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+  for (let f = 0.99; f > 0; f -= 0.01) {
+    const darker = '#' + rgb.map((c) => Math.round(c * f).toString(16).padStart(2, '0')).join('')
+    if (contrastOnWhite(darker) >= 4.5) return darker
+  }
+  return '#000000'
+}
 
 // The one source for the 5-step accessibility color scale — the Dashboard's
 // choropleth/brackets/ranking, mock/areas.ts's accessibilityColor(), and the
 // Map's legend (mock/accessibilityLegend.ts) all read from this, so there's
-// a single place to retune the breaks when real data arrives.
+// a single place to retune the breaks when real data arrives. Green = good
+// access, orange/red-orange = low. Tuned so every neighboring pair stays
+// ≥15 ΔE2000 apart under normal vision and simulated protan/deutan/tritan
+// vision: the greens lean slightly blue and the lightness steps are uneven
+// on purpose (orange vs light green, and the two dark ends, otherwise
+// collapse for red-green CVD). The low end is a red-orange, never the
+// selected-area outline's #DC2626.
 export type AccessibilityBand = { min: number; max: number; color: string; tick: string; label: string }
 
 export const accessibilityScale: AccessibilityBand[] = [
-  { min: 0, max: 29, color: '#D9822B', tick: '0%', label: '0–29%' },
-  { min: 30, max: 49, color: '#E4B064', tick: '30', label: '30–49%' },
-  { min: 50, max: 64, color: '#D8D3A0', tick: '50', label: '50–64%' },
-  { min: 65, max: 79, color: '#7FB88F', tick: '65', label: '65–79%' },
-  { min: 80, max: 100, color: '#2A7A54', tick: '80–100%', label: '80–100%' },
+  { min: 0, max: 29, color: '#B5401A', tick: '0%', label: '0–29%' },
+  { min: 30, max: 49, color: '#EB8A48', tick: '30', label: '30–49%' },
+  { min: 50, max: 64, color: '#F4E78E', tick: '50', label: '50–64%' },
+  { min: 65, max: 79, color: '#8FD0B0', tick: '65', label: '65–79%' },
+  { min: 80, max: 100, color: '#0D5538', tick: '80–100%', label: '80–100%' },
 ]
 
 /**
@@ -188,6 +230,11 @@ export function getAccessibilityColor(pct: number): string {
   return getAccessibilityBand(pct).color
 }
 
+// Every choropleth fill uses its full class color — nothing is ever faded,
+// so a fill always matches its legend swatch exactly. Emphasis (a ranking
+// selection, a clicked legend class, a compared area) is outline-only.
+const CHOROPLETH_FILL_OPACITY = 1
+
 /**
  * Choropleth fill for a district/sub-district polygon, colored by its own
  * access_pct — stroked with mapStyle.choroplethBoundary (solid, dark slate)
@@ -197,14 +244,14 @@ export function getAccessibilityColor(pct: number): string {
  */
 export function getChoroplethStyle(
   fillColor: string,
-  options?: { interactive?: boolean; fillOpacity?: number; weight?: number; color?: string },
+  options?: { interactive?: boolean },
 ): PathOptions {
   return {
-    color: options?.color ?? mapStyle.choroplethBoundary.color,
-    weight: options?.weight ?? mapStyle.choroplethBoundary.weight,
+    color: mapStyle.choroplethBoundary.color,
+    weight: mapStyle.choroplethBoundary.weight,
     dashArray: undefined,
     fillColor,
-    fillOpacity: options?.fillOpacity ?? 0.85,
+    fillOpacity: CHOROPLETH_FILL_OPACITY,
     fill: true,
     interactive: options?.interactive ?? false,
   }
