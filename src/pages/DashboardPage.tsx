@@ -18,6 +18,7 @@ import { TrendChart, type TrendChartPoint } from '../components/dashboard/TrendC
 import { computeCountAxis, computeTrendYAxis } from '../components/dashboard/trendAxis'
 import { formatYear } from '../i18n/formatYear'
 import { formatAreaSqKm } from '../i18n/formatArea'
+import { pluralize } from '../i18n/plural'
 import type { Language } from '../i18n/LanguageContext'
 import { useLanguage } from '../i18n/LanguageContext'
 import type { Strings } from '../i18n/strings'
@@ -127,7 +128,12 @@ function kpiDeltaFooter(
 
   const absText = kind === 'pp' ? Math.abs(delta).toFixed(1) : Math.abs(delta).toLocaleString()
   const signedText = `${delta > 0 ? '+' : '−'}${absText}`
-  const template = kind === 'pp' ? t.dashboard.kpi.deltaPercentagePoints : kind === 'people' ? t.dashboard.kpi.deltaPeople : t.dashboard.kpi.deltaPlaces
+  const template =
+    kind === 'pp'
+      ? t.dashboard.kpi.deltaPercentagePoints
+      : kind === 'people'
+        ? pluralize(delta, t.dashboard.kpi.deltaPeopleSingular, t.dashboard.kpi.deltaPeople)
+        : pluralize(delta, t.dashboard.kpi.deltaPlacesSingular, t.dashboard.kpi.deltaPlaces)
   const text = template.replace('{delta}', signedText).replace('{year}', formatYear(previousYear, language))
   return (
     <span className={colorClass}>
@@ -487,7 +493,6 @@ export function DashboardPage() {
     ? t.dashboard.byDistrictCardSubtitle
     : t.dashboard.byDistrictCardSubtitleInDistrict.replace('{district}', districtName)
   const tableTitle = isWholeCity ? t.dashboard.tableCardTitle : t.dashboard.tableCardTitleSubDistrictOf.replace('{district}', districtName)
-  const tableFooterTemplate = isWholeCity ? t.dashboard.tableFooter : t.dashboard.tableFooterSubDistrict
 
   // --- Control bar: one shared metric/order/limit/search driving the
   // ranking chart, the stacked bar, and the table — the scatter always plots
@@ -557,6 +562,13 @@ export function DashboardPage() {
   // re-displays this same set, it never changes which rows are in it.
   const sortedRows = useMemo(() => sortRows(searchedRows, metric, order), [searchedRows, metric, order])
   const limitedRows = useMemo(() => (limit === 'all' ? sortedRows : sortedRows.slice(0, Number(limit))), [sortedRows, limit])
+  const tableFooterText = (
+    isWholeCity
+      ? pluralize(scopedRows.length, t.dashboard.tableFooterSingular, t.dashboard.tableFooter)
+      : pluralize(scopedRows.length, t.dashboard.tableFooterSubDistrictSingular, t.dashboard.tableFooterSubDistrict)
+  )
+    .replace('{shown}', String(limitedRows.length))
+    .replace('{total}', String(scopedRows.length))
   const shownIds = useMemo(() => new Set(limitedRows.map((row) => row.id)), [limitedRows])
   // Outlining every single feature (the trivial "nothing's actually
   // filtered" case) would just add visual noise for no information — the
@@ -752,7 +764,7 @@ export function DashboardPage() {
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-[12.5px] text-slate">
-                {tableFooterTemplate.replace('{shown}', String(limitedRows.length)).replace('{total}', String(scopedRows.length))}
+                {tableFooterText}
               </span>
               <button
                 type="button"
@@ -808,7 +820,8 @@ export function DashboardPage() {
                             <span className="h-[13px] w-[13px] flex-none rounded-[3px]" style={{ background: bracket.color }} />
                             <span className="flex-1">{bracket.label}</span>
                             <span className="flex-none whitespace-nowrap text-right text-[11.5px] font-bold text-ink">
-                              {bracket.count} {unitSuffix(bracket.count)} · {Math.round(bracket.population).toLocaleString()} {t.common.peopleUnit}
+                              {bracket.count} {unitSuffix(bracket.count)} · {Math.round(bracket.population).toLocaleString()}{' '}
+                              {pluralize(Math.round(bracket.population), t.common.peopleUnitSingular, t.common.peopleUnit)}
                             </span>
                           </button>
                         )
@@ -913,7 +926,7 @@ export function DashboardPage() {
                 onSortChange={handleTableSortChange}
                 footer={
                   <>
-                    <span>{tableFooterTemplate.replace('{shown}', String(limitedRows.length)).replace('{total}', String(scopedRows.length))}</span>
+                    <span>{tableFooterText}</span>
                     <span>{t.common.sampleDataTag}</span>
                   </>
                 }

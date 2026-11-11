@@ -6,6 +6,7 @@ import { formatPct } from '../../mock/areas'
 import { totalOpsCount, type AreaRow } from '../../mock/assessmentResults'
 import type { Language } from '../../i18n/LanguageContext'
 import type { Strings } from '../../i18n/strings'
+import { pluralize } from '../../i18n/plural'
 
 type CompareItem = { key: string; color: string; row: AreaRow | undefined }
 
@@ -41,7 +42,7 @@ function buildConfigs(t: Strings): CompareKpiConfig[] {
 }
 
 /** A count gap (people/places), in the same signed +/− style as DeltaBadge's compact form, just not percentage-point based — DeltaBadge itself stays percentage-only. */
-function countGapNode(current: number, reference: number, unit: string, invert: boolean): ReactNode {
+function countGapNode(current: number, reference: number, [singular, plural]: [string, string], invert: boolean): ReactNode {
   const delta = Math.round(current - reference)
   if (delta === 0) return <span className="text-slate">–</span>
   const isGood = delta > 0 ? !invert : invert
@@ -49,7 +50,7 @@ function countGapNode(current: number, reference: number, unit: string, invert: 
   const signed = `${delta > 0 ? '+' : '−'}${Math.abs(delta).toLocaleString()}`
   return (
     <span className={colorClass}>
-      {signed} {unit}
+      {signed} {pluralize(delta, singular, plural)}
     </span>
   )
 }
@@ -97,7 +98,8 @@ function CompareKpiMiniChart({
         : Math.max(1, computeCountAxis(numericValues).max)
       : computeCountAxis(numericValues).max
   const referenceValue = showGap ? values[0] : null
-  const gapUnit = config.id === 'spaces' ? t.compare.gapPlacesUnit : t.compare.gapPeopleUnit
+  const gapUnits: [singular: string, plural: string] =
+    config.id === 'spaces' ? [t.compare.gapPlacesUnitSingular, t.compare.gapPlacesUnit] : [t.compare.gapPeopleUnitSingular, t.compare.gapPeopleUnit]
 
   return (
     <div className="min-w-0 rounded-[14px] border border-line bg-card p-3">
@@ -144,7 +146,7 @@ function CompareKpiMiniChart({
                   config.format === 'percent' ? (
                     <DeltaBadge currentValue={value} compareValue={referenceValue} kind="vsReference" compact t={t} language={language} />
                   ) : (
-                    countGapNode(value, referenceValue, gapUnit, !!config.invert)
+                    countGapNode(value, referenceValue, gapUnits, !!config.invert)
                   )
                 ) : null}
               </div>

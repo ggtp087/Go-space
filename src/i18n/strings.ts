@@ -119,6 +119,7 @@ export const en = {
     removeItem: 'Remove {item}',
     year: 'Year',
     peopleUnit: 'people',
+    peopleUnitSingular: 'person',
     meterUnit: 'm',
   },
   dashboard: {
@@ -139,6 +140,8 @@ export const en = {
     tableCardTitleSubDistrictOf: 'Sub-districts of {district}',
     tableFooter: 'Showing {shown} of {total} districts',
     tableFooterSubDistrict: 'Showing {shown} of {total} sub-districts',
+    tableFooterSingular: 'Showing {shown} of {total} district',
+    tableFooterSubDistrictSingular: 'Showing {shown} of {total} sub-district',
     byDistrictCardSubtitle: 'Where in the city is access highest and lowest?',
     byDistrictCardSubtitleInDistrict: 'Where in {district} is access highest and lowest?',
     byDistrictSummary: {
@@ -188,6 +191,8 @@ export const en = {
       deltaPercentagePoints: '{delta} percentage points from {year}',
       deltaPeople: '{delta} people from {year}',
       deltaPlaces: '{delta} spaces from {year}',
+      deltaPeopleSingular: '{delta} person from {year}',
+      deltaPlacesSingular: '{delta} space from {year}',
     },
     sections: {
       overview: 'Overview',
@@ -275,6 +280,8 @@ export const en = {
     metricOpsShare: 'Open Public Space Share',
     gapPeopleUnit: 'people',
     gapPlacesUnit: 'spaces',
+    gapPeopleUnitSingular: 'person',
+    gapPlacesUnitSingular: 'space',
     populationNote: 'Population counts depend on area size, so compare areas of the same level.',
     ofResidentsAccessible: 'accessible',
     accessibilityCaption: 'Accessibility (within 400 m)',
@@ -498,6 +505,7 @@ export const th: DeepPartial<Strings> = {
     removeItem: 'นำ {item} ออก',
     year: 'ปี',
     peopleUnit: 'คน',
+    peopleUnitSingular: 'คน',
     meterUnit: 'เมตร',
   },
   dashboard: {
@@ -526,6 +534,8 @@ export const th: DeepPartial<Strings> = {
     tableCardTitleSubDistrictOf: 'แขวงใน {district}',
     tableFooter: 'แสดง {shown} จาก {total} เขต',
     tableFooterSubDistrict: 'แสดง {shown} จาก {total} แขวง',
+    tableFooterSingular: 'แสดง {shown} จาก {total} เขต',
+    tableFooterSubDistrictSingular: 'แสดง {shown} จาก {total} แขวง',
     columns: {
       district: 'เขต',
       subDistrict: 'แขวง',
@@ -567,6 +577,8 @@ export const th: DeepPartial<Strings> = {
       deltaPercentagePoints: '{delta} จุดเปอร์เซ็นต์จากปี {year}',
       deltaPeople: '{delta} คนจากปี {year}',
       deltaPlaces: '{delta} แห่งจากปี {year}',
+      deltaPeopleSingular: '{delta} คนจากปี {year}',
+      deltaPlacesSingular: '{delta} แห่งจากปี {year}',
     },
     sections: {
       overview: 'ภาพรวม',
@@ -652,6 +664,8 @@ export const th: DeepPartial<Strings> = {
     metricOpsShare: 'สัดส่วนพื้นที่เปิดโล่งสาธารณะ',
     gapPeopleUnit: 'คน',
     gapPlacesUnit: 'แห่ง',
+    gapPeopleUnitSingular: 'คน',
+    gapPlacesUnitSingular: 'แห่ง',
     populationNote: 'จำนวนประชากรขึ้นกับขนาดพื้นที่ ใช้เทียบพื้นที่ระดับเดียวกัน',
     ofResidentsAccessible: 'เข้าถึงได้',
     accessibilityCaption: 'การเข้าถึง (ภายใน 400 ม.)',

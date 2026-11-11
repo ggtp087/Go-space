@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { GeoJSON, MapContainer, Marker, Pane, useMap, useMapEvents } from 'react-leaflet'
 import { divIcon } from 'leaflet'
 import type { Layer, LatLngTuple } from 'leaflet'
 import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon, Position } from 'geojson'
 import 'leaflet/dist/leaflet.css'
-import { getAccessibilityColor, getChoroplethSelectionStyle, getChoroplethStyle, getColoredHighlightStyle } from '../../config/mapStyle'
+import { getAccessibilityColor, getChoroplethSelectionStyle, getChoroplethStyle, getColoredHighlightHaloStyle, getColoredHighlightStyle } from '../../config/mapStyle'
 import {
   bangkokBoundaryPositions,
   bangkokOutline,
@@ -268,7 +268,13 @@ export function AccessibilityChoropleth({
         <Pane name="choropleth-multi-highlight-pane" style={{ zIndex: 403, pointerEvents: 'none' }}>
           {highlights?.map((highlight) => {
             const feature = resolveAreaFeature(highlight.id)
-            return feature && <GeoJSON key={highlight.id} data={feature} style={getColoredHighlightStyle(highlight.color)} />
+            if (!feature) return null
+            return (
+              <Fragment key={highlight.id}>
+                <GeoJSON data={feature} style={getColoredHighlightHaloStyle()} />
+                <GeoJSON data={feature} style={getColoredHighlightStyle(highlight.color)} />
+              </Fragment>
+            )
           })}
         </Pane>
         <Pane name="choropleth-labels-pane" style={{ zIndex: 404, pointerEvents: 'none' }}>

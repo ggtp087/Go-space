@@ -151,11 +151,13 @@ export const mapStyle = {
 }
 
 // Categorical palette for "which area is this" series (Compare's chips,
-// bars, legend, trend lines, and choropleth outlines) — up to 5 areas, each
-// a clearly distinct hue. No purple (too close to blue at outline weight),
-// no orange/yellow (they vanish against accessibilityScale's own green→
-// orange fills below), and no red (the map's selection color).
-export const comparisonPalette = ['#2563EB', '#DB2777', '#0D9488', '#8C564B', '#334155']
+// bars, legend, trend lines, choropleth outlines, and end labels) — up to 5
+// areas, each a clearly distinct hue, read from this one constant so a
+// palette change never needs touching more than this line. No purple (too
+// close to blue at outline weight) and no red (the map's selection color).
+// The 5th, a dark gold rather than a light yellow, still needs its own
+// handling against light fills — see getColoredHighlightStyle's halo.
+export const comparisonPalette = ['#2563EB', '#DB2777', '#0D9488', '#8C564B', '#CA8A04']
 
 // The one source for the 5-step accessibility color scale — the Dashboard's
 // choropleth/brackets/ranking, mock/areas.ts's accessibilityColor(), and the
@@ -346,7 +348,14 @@ export function getChoroplethSelectionStyle(): PathOptions {
   return { color: mapStyle.selection.color, weight: mapStyle.selection.weight, fill: false, interactive: false }
 }
 
+const COLORED_HIGHLIGHT_WEIGHT = 4
+
+/** A dark, semi-transparent halo drawn just underneath getColoredHighlightStyle's own outline — every comparisonPalette color (the dark-gold 5th one especially) needs it to stay visible against the choropleth's own light yellow/orange accessibility fills, not just against each other. */
+export function getColoredHighlightHaloStyle(): PathOptions {
+  return { color: '#111827', weight: COLORED_HIGHLIGHT_WEIGHT + 3, opacity: 0.6, fill: false, interactive: false }
+}
+
 /** Stroke-only outline in a given series color — for Compare's multiple highlighted areas on one shared choropleth. Independent of the red selection weight above: Compare's own highlight styling is unchanged. */
 export function getColoredHighlightStyle(color: string): PathOptions {
-  return { color, weight: 4, fill: false, interactive: false }
+  return { color, weight: COLORED_HIGHLIGHT_WEIGHT, fill: false, interactive: false }
 }
