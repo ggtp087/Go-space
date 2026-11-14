@@ -807,26 +807,41 @@ export function DashboardPage() {
                     <div>
                       {brackets.map((bracket) => {
                         const isActive = bracket.label === activeBandLabel
+                        // An empty class keeps its row (all 5 report levels stay
+                        // visible) but is muted and not clickable — there'd be
+                        // nothing on the map to outline. Its swatch keeps the
+                        // full class color so it still matches the map.
+                        const isEmpty = bracket.count === 0
                         return (
                           <button
                             key={bracket.label}
                             type="button"
+                            disabled={isEmpty}
                             onClick={() => setActiveBandLabel((current) => (current === bracket.label ? null : bracket.label))}
                             aria-pressed={isActive}
-                            className={`flex w-full items-center gap-[9px] rounded-md px-1.5 py-[5px] text-left text-[12.5px] text-slate transition-colors ${
-                              isActive ? 'bg-green-50 ring-1 ring-inset ring-green-600' : 'hover:bg-bg'
+                            className={`flex w-full items-start gap-[9px] rounded-md px-1.5 py-[5px] text-left transition-colors disabled:cursor-default ${
+                              isActive ? 'bg-green-50 ring-1 ring-inset ring-green-600' : isEmpty ? '' : 'hover:bg-bg'
                             }`}
                           >
-                            <span className="h-[13px] w-[13px] flex-none rounded-[3px]" style={{ background: bracket.color }} />
-                            <span className="flex-1">{bracket.label}</span>
-                            <span className="flex-none whitespace-nowrap text-right text-[11.5px] font-bold text-ink">
-                              {bracket.count} {unitSuffix(bracket.count)} · {Math.round(bracket.population).toLocaleString()}{' '}
-                              {pluralize(Math.round(bracket.population), t.common.peopleUnitSingular, t.common.peopleUnit)}
+                            <span className="mt-[3px] h-[13px] w-[13px] flex-none rounded-[3px]" style={{ background: bracket.color }} />
+                            <span className="min-w-0 flex-1">
+                              <span className={`block whitespace-nowrap text-[12.5px] font-semibold ${isEmpty ? 'text-mist' : 'text-ink'}`}>{bracket.label}</span>
+                              <span className={`block text-[11px] ${isEmpty ? 'italic text-mist' : 'text-slate'}`}>
+                                {isEmpty ? (
+                                  t.map.legendNoAreas
+                                ) : (
+                                  <>
+                                    {bracket.count} {unitSuffix(bracket.count)} · {Math.round(bracket.population).toLocaleString()}{' '}
+                                    {pluralize(Math.round(bracket.population), t.common.peopleUnitSingular, t.common.peopleUnit)}
+                                  </>
+                                )}
+                              </span>
                             </span>
                           </button>
                         )
                       })}
                     </div>
+                    <p className="mt-1.5 px-1.5 text-[10.5px] leading-snug text-mist">{t.map.legendIntervalsNote}</p>
                     {scopedRows.length > 0 && (
                       <div className="mt-3 space-y-1.5 border-t border-line pt-3 text-[11.5px] text-slate">
                         <div className="flex items-center justify-between gap-2">

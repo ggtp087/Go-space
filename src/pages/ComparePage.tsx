@@ -9,6 +9,7 @@ import { Select } from '../components/ui/Select'
 import { YearSelect } from '../components/ui/YearSelect'
 import { AccessibilityChoropleth } from '../components/dashboard/AccessibilityChoropleth'
 import { CompareKpiGrid } from '../components/dashboard/CompareKpiGrid'
+import { AccessibilityRangeLegend } from '../components/dashboard/AccessibilityRangeLegend'
 import { ComparisonTrendChart } from '../components/dashboard/ComparisonTrendChart'
 import { DeltaBadge } from '../components/dashboard/DeltaBadge'
 import { TrendChart } from '../components/dashboard/TrendChart'
@@ -404,16 +405,19 @@ export function ComparePage() {
       {mode === 'districts' && (
         <Card className="mt-6" title={t.compare.mapCardTitle} note={t.common.sampleDataTag}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
-            <AccessibilityChoropleth
-              districtId="all"
-              subDistrictId="all"
-              year={year}
-              highlights={highlightEntries}
-              fitToIds={comparisonAreas.map((a) => a.id)}
-              className="h-[400px] w-full lg:w-[60%]"
-              variant="plain"
-              language={language}
-            />
+            <div className="w-full lg:w-[60%]">
+              <AccessibilityChoropleth
+                districtId="all"
+                subDistrictId="all"
+                year={year}
+                highlights={highlightEntries}
+                fitToIds={comparisonAreas.map((a) => a.id)}
+                className="h-[400px] w-full"
+                variant="plain"
+                language={language}
+              />
+              <AccessibilityRangeLegend title={t.dashboard.kpi.accessibilityHeading} note={t.map.legendIntervalsNote} className="mt-3" />
+            </div>
             <div className="w-full space-y-1.5 lg:w-[40%]">
               {comparisonAreas.map((a, index) => {
                 const row = getAreaRow(a.id, year, language)

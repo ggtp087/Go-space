@@ -294,7 +294,7 @@ export function ComponentsPreviewPage() {
         </Section>
 
         <Section title="Legend">
-          <Legend title={t.map.legendTitle} note={t.map.legendNote} steps={accessibilityLegendSteps} />
+          <Legend title={t.map.legendTitle} note={t.map.legendNote} footnote={t.map.legendIntervalsNote} steps={accessibilityLegendSteps} />
         </Section>
 
         <Section title="DataTable">

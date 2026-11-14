@@ -38,6 +38,8 @@ export const en = {
   map: {
     legendTitle: 'Accessibility to Open Public Space',
     legendNote: 'Within 400 m walking distance (street network)',
+    legendIntervalsNote: 'Fixed 20% intervals defined by the researchers, not an official standard.',
+    legendNoAreas: 'No areas in this range',
     filtersTitle: 'Layers & Filters',
     layersSectionTitle: 'Map layers',
     filtersSectionTitle: 'Filters',
@@ -314,7 +316,7 @@ export const en = {
       brandText:
         'Accounts are provisioned for staff of the Department of City Planning and Urban Development (CPUD), Bangkok Metropolitan Administration. Registrations are verified before access is granted.',
       title: 'Create your account',
-      subtitle: 'For staff of the Department of City Planning and Urban Development (CPUD), Bangkok Metropolitan Administration.',
+      subtitle: 'For CPUD staff, Bangkok Metropolitan Administration.',
       firstNameLabel: 'First name',
       firstNamePlaceholder: 'First name',
       lastNameLabel: 'Last name',
@@ -425,6 +427,8 @@ export const th: DeepPartial<Strings> = {
   map: {
     legendTitle: 'การเข้าถึงพื้นที่เปิดโล่งสาธารณะ',
     legendNote: 'ภายในระยะเดินเท้า 400 เมตร (โครงข่ายถนน)',
+    legendIntervalsNote: 'ช่วงละ 20% กำหนดโดยผู้วิจัย ไม่ใช่เกณฑ์ทางการ',
+    legendNoAreas: 'ไม่มีพื้นที่ในช่วงนี้',
     filtersTitle: 'เลเยอร์และตัวกรอง',
     layersSectionTitle: 'เลเยอร์แผนที่',
     filtersSectionTitle: 'ตัวกรอง',

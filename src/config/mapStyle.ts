@@ -205,25 +205,33 @@ export function getSeriesTextColor(hex: string): string {
 // on purpose (orange vs light green, and the two dark ends, otherwise
 // collapse for red-green CVD). The low end is a red-orange, never the
 // selected-area outline's #DC2626.
-export type AccessibilityBand = { min: number; max: number; color: string; tick: string; label: string }
+//
+// The 5 levels are fixed 20% intervals as defined in the project report —
+// researcher-defined, not an official standard. Each band is [min, next
+// band's min); the top band runs to 100.
+export type AccessibilityBand = { min: number; color: string; tick: string; label: string }
 
 export const accessibilityScale: AccessibilityBand[] = [
-  { min: 0, max: 29, color: '#B5401A', tick: '0%', label: '0–29%' },
-  { min: 30, max: 49, color: '#EB8A48', tick: '30', label: '30–49%' },
-  { min: 50, max: 64, color: '#F4E78E', tick: '50', label: '50–64%' },
-  { min: 65, max: 79, color: '#8FD0B0', tick: '65', label: '65–79%' },
-  { min: 80, max: 100, color: '#0D5538', tick: '80–100%', label: '80–100%' },
+  { min: 0, color: '#B5401A', tick: '0%', label: '0–19.9%' },
+  { min: 20, color: '#EB8A48', tick: '20', label: '20–39.9%' },
+  { min: 40, color: '#F4E78E', tick: '40', label: '40–59.9%' },
+  { min: 60, color: '#8FD0B0', tick: '60', label: '60–79.9%' },
+  { min: 80, color: '#0D5538', tick: '80–100%', label: '80–100%' },
 ]
 
 /**
- * Classifies on the ROUNDED value (not the raw decimal), so a figure that
- * displays as "65%" always gets the 65–79 band's color — never a neighboring
- * band's, which is what raw-value classification could do right at a
- * boundary (e.g. 64.6 displays as "65%" but is still < 65 unrounded).
+ * Classifies on the value rounded to one decimal — the precision every
+ * accessibility figure is displayed at — with each band's lower bound
+ * inclusive, so the number shown always matches its class: 79.96 displays
+ * as "80.0%" and is 80–100%, while 79.94 displays as "79.9%" and is
+ * 60–79.9%.
  */
 export function getAccessibilityBand(pct: number): AccessibilityBand {
-  const rounded = Math.round(pct)
-  return accessibilityScale.find((b) => rounded >= b.min && rounded <= b.max) ?? accessibilityScale[accessibilityScale.length - 1]
+  const rounded = Math.round(pct * 10) / 10
+  for (let i = accessibilityScale.length - 1; i > 0; i -= 1) {
+    if (rounded >= accessibilityScale[i].min) return accessibilityScale[i]
+  }
+  return accessibilityScale[0]
 }
 
 export function getAccessibilityColor(pct: number): string {

@@ -6,12 +6,14 @@ export type LegendStep = {
 type LegendProps = {
   title: string
   note?: string
+  /** Small print under the scale — e.g. how the class breaks were defined. */
+  footnote?: string
   steps: LegendStep[]
   className?: string
 }
 
 /** The 5-step accessibility color scale shown on map/dashboard views. */
-export function Legend({ title, note, steps, className = '' }: LegendProps) {
+export function Legend({ title, note, footnote, steps, className = '' }: LegendProps) {
   return (
     <div className={`w-[250px] rounded-xl border border-line bg-card p-[14px_16px] shadow-card ${className}`}>
       <p className="mb-[3px] text-xs font-bold text-ink">{title}</p>
@@ -26,6 +28,7 @@ export function Legend({ title, note, steps, className = '' }: LegendProps) {
           <span key={index}>{step.tick}</span>
         ))}
       </div>
+      {footnote && <p className="mt-2 text-[10.5px] leading-snug text-mist">{footnote}</p>}
     </div>
   )
 }

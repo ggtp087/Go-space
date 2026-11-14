@@ -62,7 +62,7 @@ export type AccessibilityBracket = {
   ids: string[]
 }
 
-/** How many (and which) of the given areas fall into each step of the 5-step scale — classified the same way (on the rounded value) as the bar/choropleth colors, via getAccessibilityBand. Carries each band's area ids (for a legend-click highlight) and total population (for a "3 districts · 410,000 people" row). */
+/** How many (and which) of the given areas fall into each step of the 5-step scale — classified the same way (on the value rounded to one decimal) as the bar/choropleth colors, via getAccessibilityBand. Carries each band's area ids (for a legend-click highlight) and total population (for a "3 districts · 410,000 people" row). */
 export function getAccessibilityBrackets(rows: { id: string; access_pct: number; total_population: number }[]): AccessibilityBracket[] {
   return accessibilityScale
     .slice()
