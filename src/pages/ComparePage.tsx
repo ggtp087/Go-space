@@ -3,7 +3,6 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Chip } from '../components/ui/Chip'
 import { DonutChart } from '../components/ui/DonutChart'
-import { ProgressBar } from '../components/ui/ProgressBar'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
 import { YearSelect } from '../components/ui/YearSelect'
@@ -11,7 +10,6 @@ import { AccessibilityChoropleth } from '../components/dashboard/AccessibilityCh
 import { CompareKpiGrid } from '../components/dashboard/CompareKpiGrid'
 import { AccessibilityRangeLegend } from '../components/dashboard/AccessibilityRangeLegend'
 import { ComparisonTrendChart } from '../components/dashboard/ComparisonTrendChart'
-import { DeltaBadge } from '../components/dashboard/DeltaBadge'
 import { TrendChart } from '../components/dashboard/TrendChart'
 import { computeTrendYAxis } from '../components/dashboard/trendAxis'
 import { formatYear } from '../i18n/formatYear'
@@ -176,17 +174,6 @@ export function ComparePage() {
     setComparisonAreas((current) => current.filter((a) => a.id !== id))
   }
 
-  function setAsReference(id: string) {
-    setComparisonAreas((current) => {
-      const index = current.findIndex((a) => a.id === id)
-      if (index <= 0) return current
-      const next = [...current]
-      const [item] = next.splice(index, 1)
-      next.unshift(item)
-      return next
-    })
-  }
-
   function toggleYear(y: Year) {
     setSelectedYears((current) => {
       if (current.includes(y)) {
@@ -214,9 +201,6 @@ export function ComparePage() {
           color: comparisonPalette[index % comparisonPalette.length],
           row: getAreaRow(yearsAreaId, y, language),
         }))
-
-  const referenceRow = mode === 'districts' ? comparisonItems[0]?.row : undefined
-  const referenceAreaName = comparisonItems[0]?.title ?? ''
 
   const yearsAccessSeries = getMetricSeries(yearsAreaId, 'access_pct')
   const yearsShareSeries = getMetricSeries(yearsAreaId, 'share_ops_pct')
@@ -270,15 +254,8 @@ export function ComparePage() {
 
       {mode === 'districts' ? (
         <div className="mt-5 flex flex-wrap items-center gap-2">
-          {comparisonAreas.map((a, index) => (
-            <Chip
-              key={a.id}
-              label={displayName(a, language)}
-              removable
-              swatchColor={a.color}
-              onRemove={() => removeArea(a.id)}
-              reference={{ isReference: index === 0, onSetReference: () => setAsReference(a.id), label: t.compare.setAsReference }}
-            />
+          {comparisonAreas.map((a) => (
+            <Chip key={a.id} label={displayName(a, language)} removable swatchColor={a.color} onRemove={() => removeArea(a.id)} />
           ))}
           {comparisonAreas.length < MAX_COMPARISON_AREAS && availableToAdd.length > 0 && (
             <div className="flex items-center gap-2">
@@ -329,17 +306,16 @@ export function ComparePage() {
         note={t.common.sampleDataTag}
         actions={
           <div className="flex gap-4">
-            {comparisonItems.map((item, index) => (
+            {comparisonItems.map((item) => (
               <span key={item.key} className="flex items-center gap-1.5 text-xs font-semibold text-slate">
                 <span className="h-2.5 w-2.5 flex-none rounded-[3px]" style={{ background: item.color }} />
                 {item.title}
-                {mode === 'districts' && index === 0 && <span className="text-mist">({t.compare.referenceBadge})</span>}
               </span>
             ))}
           </div>
         }
       >
-        <CompareKpiGrid items={comparisonItems} showGap={mode === 'districts'} t={t} language={language} />
+        <CompareKpiGrid items={comparisonItems} t={t} />
       </Card>
 
       <Card
@@ -419,7 +395,7 @@ export function ComparePage() {
               <AccessibilityRangeLegend title={t.dashboard.kpi.accessibilityHeading} note={t.map.legendIntervalsNote} className="mt-3" />
             </div>
             <div className="w-full space-y-1.5 lg:w-[40%]">
-              {comparisonAreas.map((a, index) => {
+              {comparisonAreas.map((a) => {
                 const row = getAreaRow(a.id, year, language)
                 return (
                   <div key={a.id} className="flex items-center gap-2 rounded-md px-1.5 py-1 text-[12.5px]">
@@ -429,7 +405,6 @@ export function ComparePage() {
                       {levelBadgeText(a, t)}
                     </span>
                     <span className="flex-none text-right font-bold text-ink tabular-nums">{row ? formatPct(row.access_pct) : '—'}</span>
-                    {index === 0 && <span className="flex-none text-[10.5px] text-mist">({t.compare.referenceBadge})</span>}
                   </div>
                 )
               })}
@@ -439,7 +414,7 @@ export function ComparePage() {
       )}
 
       <div className="mt-6 flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory">
-        {comparisonItems.map((item, index) => (
+        {comparisonItems.map((item) => (
           <Card key={item.key} className="min-w-[200px] flex-1 snap-start overflow-hidden">
             <div className="mb-1 flex items-center justify-center gap-1.5">
               <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ background: item.color }} />
@@ -467,24 +442,6 @@ export function ComparePage() {
                     color={accessibilityColor(item.row.access_pct)}
                   />
                 </div>
-                {mode === 'districts' && (
-                  <p className="mt-1 text-center text-[11px] whitespace-nowrap">
-                    {index === 0 ? (
-                      <span className="text-mist">{t.compare.referenceBadge}</span>
-                    ) : referenceRow ? (
-                      <DeltaBadge
-                        currentValue={item.row.access_pct}
-                        compareValue={referenceRow.access_pct}
-                        kind="vsReference"
-                        compact
-                        referenceName={referenceAreaName}
-                        t={t}
-                        language={language}
-                      />
-                    ) : null}
-                  </p>
-                )}
-
                 <div className="mt-3 space-y-1 text-[11px] text-slate">
                   <div className="flex items-center justify-between gap-2">
                     <span>{t.compare.populationLabel}</span>
@@ -502,31 +459,20 @@ export function ComparePage() {
                   </div>
                 </div>
 
+                {/* Label on its own full-width line, then bar + value below —
+                    so a wide value can never push the label onto a second
+                    line and misalign the cards. */}
                 <div className="mt-3">
-                  <ProgressBar
-                    size="sm"
-                    label={t.compare.metricOpsShare}
-                    valueLabel={formatPct(item.row.share_ops_pct)}
-                    value={item.row.share_ops_pct}
-                    color={item.color}
-                  />
-                  {mode === 'districts' && (
-                    <p className="mt-1 text-center text-[11px] whitespace-nowrap">
-                      {index === 0 ? (
-                        <span className="text-mist">{t.compare.referenceBadge}</span>
-                      ) : referenceRow ? (
-                        <DeltaBadge
-                          currentValue={item.row.share_ops_pct}
-                          compareValue={referenceRow.share_ops_pct}
-                          kind="vsReference"
-                          compact
-                          referenceName={referenceAreaName}
-                          t={t}
-                          language={language}
-                        />
-                      ) : null}
-                    </p>
-                  )}
+                  <p className="text-[11px] text-slate">{t.compare.metricOpsShare}</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <div className="h-1.5 min-w-0 flex-1 rounded-full bg-bg">
+                      <div
+                        className="h-1.5 rounded-full"
+                        style={{ width: `${Math.min(100, Math.max(0, item.row.share_ops_pct))}%`, background: item.color }}
+                      />
+                    </div>
+                    <span className="flex-none text-[12.5px] font-bold text-ink tabular-nums">{formatPct(item.row.share_ops_pct)}</span>
+                  </div>
                 </div>
               </>
             )}

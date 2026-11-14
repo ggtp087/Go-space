@@ -1,12 +1,8 @@
-import type { ReactNode } from 'react'
-import { DeltaBadge } from './DeltaBadge'
 import { KPI_ICONS } from './kpiIcons'
 import { computeCountAxis } from './trendAxis'
 import { formatPct } from '../../mock/areas'
 import { totalOpsCount, type AreaRow } from '../../mock/assessmentResults'
-import type { Language } from '../../i18n/LanguageContext'
 import type { Strings } from '../../i18n/strings'
-import { pluralize } from '../../i18n/plural'
 
 type CompareItem = { key: string; color: string; row: AreaRow | undefined }
 
@@ -17,8 +13,6 @@ type CompareKpiConfig = {
   heading: string
   tone: 'green' | 'amber'
   format: MetricFormat
-  /** A decrease is the good direction (residents without access) — flips the gap's green/red convention. */
-  invert?: boolean
   getValue: (row: AreaRow) => number
 }
 
@@ -33,7 +27,6 @@ function buildConfigs(t: Strings): CompareKpiConfig[] {
       heading: t.dashboard.kpi.notCoveredHeading,
       tone: 'amber',
       format: 'count',
-      invert: true,
       getValue: (row) => Math.round(row.total_population - row.population_with_access),
     },
     { id: 'spaces', heading: t.dashboard.kpi.spacesHeading, tone: 'green', format: 'count', getValue: (row) => totalOpsCount(row.ops_count) },
@@ -41,34 +34,20 @@ function buildConfigs(t: Strings): CompareKpiConfig[] {
   ]
 }
 
-/** A count gap (people/places), in the same signed +/− style as DeltaBadge's compact form, just not percentage-point based — DeltaBadge itself stays percentage-only. */
-function countGapNode(current: number, reference: number, [singular, plural]: [string, string], invert: boolean): ReactNode {
-  const delta = Math.round(current - reference)
-  if (delta === 0) return <span className="text-slate">–</span>
-  const isGood = delta > 0 ? !invert : invert
-  const colorClass = isGood ? 'font-semibold text-green-700' : 'font-semibold text-accent-600'
-  const signed = `${delta > 0 ? '+' : '−'}${Math.abs(delta).toLocaleString()}`
-  return (
-    <span className={colorClass}>
-      {signed} {pluralize(delta, singular, plural)}
-    </span>
-  )
-}
-
 /**
  * The Comparison page's "Key metrics" grid — one small chart per Dashboard
  * KPI (same order, icons, and headings), one bar per compared area in its
- * series color. Reference-area gap only shown in "compare areas" mode
- * (`showGap`); "compare years" mode has no single reference area.
+ * series color, labeled with its own value. No gaps between areas — each
+ * area's values stand on their own.
  */
-export function CompareKpiGrid({ items, showGap, t, language }: { items: CompareItem[]; showGap: boolean; t: Strings; language: Language }) {
+export function CompareKpiGrid({ items, t }: { items: CompareItem[]; t: Strings }) {
   const configs = buildConfigs(t)
   const hasPopulationCharts = configs.some((c) => c.id === 'covered' || c.id === 'notCovered')
   return (
     <div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {configs.map((config) => (
-          <CompareKpiMiniChart key={config.id} config={config} items={items} showGap={showGap} t={t} language={language} />
+          <CompareKpiMiniChart key={config.id} config={config} items={items} />
         ))}
       </div>
       {hasPopulationCharts && <p className="mt-3 text-[11px] text-mist">{t.compare.populationNote}</p>}
@@ -76,19 +55,7 @@ export function CompareKpiGrid({ items, showGap, t, language }: { items: Compare
   )
 }
 
-function CompareKpiMiniChart({
-  config,
-  items,
-  showGap,
-  t,
-  language,
-}: {
-  config: CompareKpiConfig
-  items: CompareItem[]
-  showGap: boolean
-  t: Strings
-  language: Language
-}) {
+function CompareKpiMiniChart({ config, items }: { config: CompareKpiConfig; items: CompareItem[] }) {
   const values = items.map((item) => (item.row ? config.getValue(item.row) : null))
   const numericValues = values.filter((v): v is number => v !== null)
   const axisMax =
@@ -97,9 +64,6 @@ function CompareKpiMiniChart({
         ? 100
         : Math.max(1, computeCountAxis(numericValues).max)
       : computeCountAxis(numericValues).max
-  const referenceValue = showGap ? values[0] : null
-  const gapUnits: [singular: string, plural: string] =
-    config.id === 'spaces' ? [t.compare.gapPlacesUnitSingular, t.compare.gapPlacesUnit] : [t.compare.gapPeopleUnitSingular, t.compare.gapPeopleUnit]
 
   return (
     <div className="min-w-0 rounded-[14px] border border-line bg-card p-3">
@@ -134,26 +98,6 @@ function CompareKpiMiniChart({
           )
         })}
       </div>
-      {showGap && (
-        <div className="mt-1.5 flex justify-center gap-1.5">
-          {items.map((item, index) => {
-            const value = values[index]
-            return (
-              <div key={item.key} className="min-w-0 flex-1 text-center text-[9px] leading-tight">
-                {index === 0 ? (
-                  <span className="text-mist">{t.compare.referenceBadge}</span>
-                ) : value !== null && referenceValue !== null ? (
-                  config.format === 'percent' ? (
-                    <DeltaBadge currentValue={value} compareValue={referenceValue} kind="vsReference" compact t={t} language={language} />
-                  ) : (
-                    countGapNode(value, referenceValue, gapUnits, !!config.invert)
-                  )
-                ) : null}
-              </div>
-            )
-          })}
-        </div>
-      )}
     </div>
   )
 }
