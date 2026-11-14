@@ -82,7 +82,6 @@ export const en = {
     opsCard: {
       areaLabel: 'Area',
       openedLabel: 'Opened',
-      agencyLabel: 'Agency',
       networkLabel: 'Network',
       withinLabel: 'within 400 m',
       serviceAreaLabel: 'Service area',
@@ -468,7 +467,6 @@ export const th: DeepPartial<Strings> = {
     opsCard: {
       areaLabel: 'พื้นที่',
       openedLabel: 'เปิดให้บริการ',
-      agencyLabel: 'หน่วยงาน',
       networkLabel: 'โครงข่ายถนน',
       withinLabel: 'ภายใน 400 เมตร',
       serviceAreaLabel: 'พื้นที่บริการ',

@@ -23,7 +23,6 @@ export type OpsPointProperties = {
   name: string
   ops_type: OpsType
   area_sqm: number
-  agency: string
   opened_year: number
   subdistrict_id: string
 }
@@ -46,13 +45,6 @@ const AREA_RANGE_SQM: Record<OpsType, [number, number]> = {
   park_15min: [1_000, 8_000],
   sports_ground: [2_000, 15_000],
 }
-
-const AGENCIES = [
-  'Bangkok Metropolitan Administration',
-  'District Public Works Office',
-  'Department of Environment',
-  'Community Management Office',
-] as const
 
 const OPENED_YEAR_MIN = 1985
 const OPENED_YEAR_MAX = 2024
@@ -141,7 +133,6 @@ function buildOpsPoints(): FeatureCollection<Point, OpsPointProperties> {
     // so these don't correlate with which sub-district or type was chosen.
     const [areaMin, areaMax] = AREA_RANGE_SQM[opsType]
     const areaSqm = Math.round(areaMin + (areaMax - areaMin) * pseudoRandom01(candidate * 5 + 0.19))
-    const agency = AGENCIES[Math.floor(pseudoRandom01(candidate * 5 + 0.41) * AGENCIES.length)]
     const openedYear = Math.round(OPENED_YEAR_MIN + (OPENED_YEAR_MAX - OPENED_YEAR_MIN) * pseudoRandom01(candidate * 5 + 0.67))
 
     countsBySubDistrict.set(subdistrictId, existingCount + 1)
@@ -152,7 +143,6 @@ function buildOpsPoints(): FeatureCollection<Point, OpsPointProperties> {
         name: `${POINT_NAME_EN[opsType]} ${typeCounters[opsType]}`,
         ops_type: opsType,
         area_sqm: areaSqm,
-        agency,
         opened_year: openedYear,
         subdistrict_id: subdistrictId,
       },
