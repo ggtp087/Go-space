@@ -1082,7 +1082,6 @@ function OpsPopupCard({
       <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-line pt-2.5">
         <PopupStat label={t.map.opsCard.areaLabel} value={formatAreaSqm(properties.area_sqm, language)} />
         <PopupStat label={t.map.opsCard.openedLabel} value={formatYear(properties.opened_year, language)} />
-        <PopupStat label={t.map.opsCard.agencyLabel} value={properties.agency} className="col-span-2" />
       </div>
 
       <div className="mt-3 border-t border-line pt-1">
@@ -1123,9 +1122,9 @@ function OpsPopupCard({
   )
 }
 
-function PopupStat({ label, value, className = '' }: { label: string; value: string; className?: string }) {
+function PopupStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className={className}>
+    <div>
       <div className="text-[10.5px] uppercase tracking-[.4px] text-mist">{label}</div>
       <div className="truncate text-[12.5px] font-semibold text-ink">{value}</div>
     </div>
