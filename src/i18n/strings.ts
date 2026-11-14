@@ -296,7 +296,8 @@ export const en = {
   auth: {
     login: {
       brandTitle: "Measuring access to open public space across Bangkok's districts and sub-districts.",
-      brandText: "A GIS platform that brings the map and the numbers behind SDG Indicator 11.7.1 into one view for Bangkok's 50 districts and 180 sub-districts.",
+      brandText:
+        "A GIS platform that brings the map and the numbers behind SDG Indicator 11.7.1 into one view for Bangkok's 50 districts and 180 sub-districts, designed for staff of the Department of City Planning and Urban Development (CPUD), Bangkok Metropolitan Administration.",
       title: 'Sign in',
       subtitle: 'Sign in to the Bangkok open public space accessibility platform.',
       emailLabel: 'Work email',
@@ -305,15 +306,16 @@ export const en = {
       rememberMe: 'Remember me',
       forgotPassword: 'Forgot password?',
       signInButton: 'Sign in',
-      staffDivider: 'Bangkok Metropolitan Administration staff',
+      staffDivider: 'For CPUD staff, BMA',
       noAccount: "Don't have an account?",
       registerHere: 'Register here',
     },
     register: {
       brandTitle: 'Request access for your planning team.',
-      brandText: "Accounts are provisioned for staff of the Department of City Planning and Urban Development and partner BMA departments. Registrations are verified before access is granted.",
+      brandText:
+        'Accounts are provisioned for staff of the Department of City Planning and Urban Development (CPUD), Bangkok Metropolitan Administration. Registrations are verified before access is granted.',
       title: 'Create your account',
-      subtitle: 'For urban planners and staff of Bangkok Metropolitan Administration.',
+      subtitle: 'For staff of the Department of City Planning and Urban Development (CPUD), Bangkok Metropolitan Administration.',
       firstNameLabel: 'First name',
       firstNamePlaceholder: 'First name',
       lastNameLabel: 'Last name',
@@ -681,7 +683,7 @@ export const th: DeepPartial<Strings> = {
     login: {
       brandTitle: 'วัดการเข้าถึงพื้นที่เปิดโล่งสาธารณะ ทุกเขต ทุกแขวงในกรุงเทพมหานคร',
       brandText:
-        'แพลตฟอร์ม GIS ที่รวมแผนที่และตัวเลขเบื้องหลังตัวชี้วัด SDG 11.7.1 ไว้ในมุมมองเดียว สำหรับ 50 เขตและ 180 แขวงของกรุงเทพมหานคร',
+        'แพลตฟอร์ม GIS ที่รวมแผนที่และตัวเลขของตัวชี้วัด SDG 11.7.1 ไว้ในหน้าเดียว ครอบคลุม 50 เขต 180 แขวงของกรุงเทพมหานคร ออกแบบสำหรับเจ้าหน้าที่สำนักการวางผังและพัฒนาเมือง กรุงเทพมหานคร',
       title: 'เข้าสู่ระบบ',
       subtitle: 'เข้าใช้งานแพลตฟอร์มการเข้าถึงพื้นที่เปิดโล่งสาธารณะของกรุงเทพมหานคร',
       emailLabel: 'อีเมลที่ทำงาน',
@@ -690,16 +692,16 @@ export const th: DeepPartial<Strings> = {
       rememberMe: 'จดจำฉันไว้',
       forgotPassword: 'ลืมรหัสผ่าน?',
       signInButton: 'เข้าสู่ระบบ',
-      staffDivider: 'เจ้าหน้าที่กรุงเทพมหานคร',
+      staffDivider: 'สำหรับเจ้าหน้าที่สำนักการวางผังและพัฒนาเมือง กทม.',
       noAccount: 'ยังไม่มีบัญชี?',
       registerHere: 'ลงทะเบียนที่นี่',
     },
     register: {
       brandTitle: 'ขอสิทธิ์การเข้าถึงสำหรับทีมผังเมืองของคุณ',
       brandText:
-        'บัญชีผู้ใช้จัดเตรียมไว้สำหรับเจ้าหน้าที่สำนักการวางผังและพัฒนาเมือง และหน่วยงานพันธมิตรของกรุงเทพมหานคร การลงทะเบียนจะได้รับการตรวจสอบก่อนให้สิทธิ์เข้าใช้งาน',
+        'บัญชีผู้ใช้จัดเตรียมไว้สำหรับเจ้าหน้าที่สำนักการวางผังและพัฒนาเมือง กรุงเทพมหานคร การลงทะเบียนจะได้รับการตรวจสอบก่อนให้สิทธิ์เข้าใช้งาน',
       title: 'สร้างบัญชีของคุณ',
-      subtitle: 'สำหรับนักผังเมืองและเจ้าหน้าที่กรุงเทพมหานคร',
+      subtitle: 'สำหรับเจ้าหน้าที่สำนักการวางผังและพัฒนาเมือง กรุงเทพมหานคร',
       firstNameLabel: 'ชื่อ',
       firstNamePlaceholder: 'ชื่อ',
       lastNameLabel: 'นามสกุล',
