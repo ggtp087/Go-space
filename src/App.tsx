@@ -4,7 +4,8 @@ import { AuthLayout } from './components/layout/AuthLayout'
 import { LanguageProvider } from './i18n/LanguageProvider'
 import { YearProvider } from './state/YearProvider'
 import { AreaProvider } from './state/AreaProvider'
-import { CurrentUserProvider } from './state/CurrentUserProvider'
+import { AuthProvider } from './state/AuthProvider'
+import { RequireAuth } from './components/auth/RequireAuth'
 import { ToastProvider } from './state/ToastProvider'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
@@ -19,7 +20,7 @@ function App() {
     <LanguageProvider>
       <YearProvider>
         <AreaProvider>
-          <CurrentUserProvider>
+          <AuthProvider>
             <ToastProvider>
               <BrowserRouter>
                 <Routes>
@@ -31,7 +32,14 @@ function App() {
                     <Route path="/reset-password" element={<ResetPasswordPage />} />
                   </Route>
 
-                  <Route element={<AppLayout />}>
+                  {/* Every page of the app needs a session; only the sign-in flows above are public. */}
+                  <Route
+                    element={
+                      <RequireAuth>
+                        <AppLayout />
+                      </RequireAuth>
+                    }
+                  >
                     <Route path="/map" element={<MapPage />} />
                     <Route path="/dashboard" element={<DashboardPage />} />
                     <Route path="/comparison" element={<ComparePage />} />
@@ -41,7 +49,7 @@ function App() {
                 </Routes>
               </BrowserRouter>
             </ToastProvider>
-          </CurrentUserProvider>
+          </AuthProvider>
         </AreaProvider>
       </YearProvider>
     </LanguageProvider>

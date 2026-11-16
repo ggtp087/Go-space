@@ -24,3 +24,14 @@ export async function query<Row extends pg.QueryResultRow>(label: string, text: 
   if (ms > SLOW_QUERY_MS) console.warn(`[slow query] ${label}: ${ms.toFixed(0)} ms (${result.rowCount} rows)`)
   return result.rows
 }
+
+/**
+ * A separate pool for the auth/account routes, which write to schema app
+ * (users, user_profiles, user_activity_logs). The spatial endpoints keep
+ * using the read-only `pool` above; nothing here touches schema spatial.
+ */
+export const appPool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 5,
+  options: '-c statement_timeout=10000',
+})

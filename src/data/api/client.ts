@@ -77,10 +77,47 @@ export type ApiFeature<G extends Point | MultiPolygon | Polygon, P> = Feature<G,
 
 export class ApiError extends Error {
   readonly status: number
-  constructor(status: number, message: string) {
+  /** The server's machine-readable reason (EMAIL_TAKEN, INVALID_CREDENTIALS, …), translated by the caller. */
+  readonly code?: string
+  /** Per-field validation codes from the server. */
+  readonly fields?: Record<string, string>
+  constructor(status: number, message: string, code?: string, fields?: Record<string, string>) {
     super(message)
     this.status = status
+    this.code = code
+    this.fields = fields
   }
+}
+
+async function toApiError(response: Response): Promise<ApiError> {
+  let message = `${response.status} ${response.statusText}`
+  let code: string | undefined
+  let fields: Record<string, string> | undefined
+  try {
+    const body = (await response.json()) as { error?: string; code?: string; fields?: Record<string, string> }
+    if (body.error) message = body.error
+    code = body.code
+    fields = body.fields
+  } catch {
+    // Non-JSON error body — keep the status text.
+  }
+  return new ApiError(response.status, message, code, fields)
+}
+
+/**
+ * POST / PATCH a JSON body to /api/<path>. The session is an httpOnly
+ * cookie the browser sends on its own (same origin) — no token is ever
+ * read or stored by the client.
+ */
+export async function apiSend<T>(method: 'POST' | 'PATCH', path: string, body?: unknown): Promise<T> {
+  const response = await fetch(`/api/${path}`, {
+    method,
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (!response.ok) throw await toApiError(response)
+  return (await response.json()) as T
 }
 
 /** GET /api/<path> with query params; throws ApiError with the server's message on a non-2xx response. */
@@ -90,16 +127,22 @@ export async function apiGet<T>(path: string, params: Record<string, string | nu
     if (value !== undefined) search.set(key, String(value))
   }
   const query = search.toString()
-  const response = await fetch(`/api/${path}${query ? `?${query}` : ''}`, { signal, headers: { Accept: 'application/json' } })
-  if (!response.ok) {
-    let message = `${response.status} ${response.statusText}`
-    try {
-      const body = (await response.json()) as { error?: string }
-      if (body.error) message = body.error
-    } catch {
-      // Non-JSON error body — keep the status text.
-    }
-    throw new ApiError(response.status, message)
-  }
+  const response = await fetch(`/api/${path}${query ? `?${query}` : ''}`, { signal, credentials: 'same-origin', headers: { Accept: 'application/json' } })
+  if (!response.ok) throw await toApiError(response)
   return (await response.json()) as T
 }
+
+/** The signed-in user as returned by /api/auth/me, /login and /account/profile. */
+export type ApiUser = {
+  user_id: number
+  email: string
+  first_name_th: string
+  last_name_th: string
+  first_name_en: string
+  last_name_en: string
+  department_id: number
+  position_id: number
+}
+
+export type ApiDepartment = { department_id: number; name_th: string; name_en: string }
+export type ApiPosition = { position_id: number; name_th: string; name_en: string }

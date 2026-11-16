@@ -5,52 +5,113 @@ import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
+import { ApiError, apiSend } from '../data/api/client'
+import { lookupName, lookupOptions, useDepartments, usePositions } from '../data/lookups'
 import { useLanguage } from '../i18n/LanguageContext'
 import { focusFirstInvalidName, trimNames, type NameField } from '../i18n/nameValidation'
 import type { PersonNames } from '../i18n/personName'
-import { departments, lookupName, lookupOptions, positions } from '../mock-auth/organization'
-import { submitRegistration } from '../mock-auth/saves'
-import { useToast } from '../state/ToastContext'
+import type { LoginLocationState } from './LoginPage'
 
 const NAME_ID_PREFIX = 'register-name'
+const FIELD_IDS = { email: 'register-email', password: 'register-password', confirm: 'register-confirm-password' } as const
+const EMPTY_NAMES: PersonNames = { first_name_th: '', last_name_th: '', first_name_en: '', last_name_en: '' }
+
+// Same rules as the server (server/src/auth.ts).
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+function isStrongPassword(password: string): boolean {
+  return password.length >= 10 && password.length <= 128 && /\d/.test(password) && /[^A-Za-z0-9]/.test(password)
+}
+
+type FieldError = 'emailInvalid' | 'emailTaken' | 'passwordTooWeak' | 'passwordMismatch'
 
 export function RegisterPage() {
   const { t, language } = useLanguage()
   const navigate = useNavigate()
-  const { showToast } = useToast()
-  const [names, setNames] = useState<PersonNames>({ first_name_th: 'นิสา', last_name_th: 'ประเสริฐ', first_name_en: 'Nisa', last_name_en: 'Prasert' })
+  const departments = useDepartments()
+  const positions = usePositions()
+  const [names, setNames] = useState<PersonNames>(EMPTY_NAMES)
   const [touched, setTouched] = useState<Partial<Record<NameField, boolean>>>({})
   const [submitAttempted, setSubmitAttempted] = useState(false)
-  const [email, setEmail] = useState('nisa.p@bma.go.th')
-  const [department, setDepartment] = useState(departments[0].id)
-  const [position, setPosition] = useState(positions[0].id)
-  const [agreedToTerms, setAgreedToTerms] = useState(true)
+  const [email, setEmail] = useState('')
+  // The email the server said is taken (compared case-insensitively, like the server).
+  const [takenEmail, setTakenEmail] = useState<string | null>(null)
+  // '' = not chosen yet: the first lookup row is used.
+  const [department, setDepartment] = useState('')
+  const [position, setPosition] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
+  const [submitError, setSubmitError] = useState(false)
   const submitButtonRef = useRef<HTMLButtonElement>(null)
+
+  const departmentRows = departments.status === 'ready' ? departments.data : []
+  const positionRows = positions.status === 'ready' ? positions.data : []
+  const lookupsReady = departmentRows.length > 0 && positionRows.length > 0
+  const lookupsFailed = departments.status === 'error' || positions.status === 'error'
+  const departmentId = Number(department || departmentRows[0]?.id)
+  const positionId = Number(position || positionRows[0]?.id)
+
+  const normalizedEmail = email.trim().toLowerCase()
+  const fieldErrors: Record<keyof typeof FIELD_IDS, FieldError | null> = {
+    email: !EMAIL.test(normalizedEmail) ? 'emailInvalid' : takenEmail === normalizedEmail ? 'emailTaken' : null,
+    password: isStrongPassword(password) ? null : 'passwordTooWeak',
+    confirm: confirmPassword === password ? null : 'passwordMismatch',
+  }
+  const errorText = (field: keyof typeof FIELD_IDS) => {
+    const error = fieldErrors[field]
+    // "Taken" comes from the server, so it shows as soon as it's known.
+    return error && (submitAttempted || error === 'emailTaken') ? t.auth.register[error] : undefined
+  }
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
+    if (!agreedToTerms || !lookupsReady) return
     setSubmitAttempted(true)
-    // Not submittable until all four names are valid: show every error and
-    // put focus on the first one instead of opening the review.
+    setSubmitError(false)
+    // Not submittable until every field is valid: show every error and put
+    // focus on the first one instead of opening the review.
     if (focusFirstInvalidName(NAME_ID_PREFIX, names)) return
+    const firstInvalid = (['email', 'password', 'confirm'] as const).find((field) => fieldErrors[field])
+    if (firstInvalid) {
+      document.getElementById(FIELD_IDS[firstInvalid])?.focus()
+      return
+    }
     setReviewOpen(true)
   }
 
   async function confirmRegistration() {
-    await submitRegistration()
-    setReviewOpen(false)
-    showToast(t.auth.register.successToast)
-    navigate('/login')
+    try {
+      await apiSend('POST', 'auth/register', {
+        ...trimNames(names),
+        email: normalizedEmail,
+        password,
+        department_id: departmentId,
+        position_id: positionId,
+      })
+    } catch (error) {
+      setReviewOpen(false)
+      if (error instanceof ApiError && error.code === 'EMAIL_TAKEN') {
+        setTakenEmail(normalizedEmail)
+        window.setTimeout(() => document.getElementById(FIELD_IDS.email)?.focus())
+      } else {
+        console.error('[auth] register', error)
+        setSubmitError(true)
+      }
+      return
+    }
+    // Active straight away (no approval step): sign in on the login page.
+    const state: LoginLocationState = { registered: true }
+    navigate('/login', { state })
   }
 
   const trimmed = trimNames(names)
   const reviewRows = [
     { label: t.auth.register.reviewNameTh, value: `${trimmed.first_name_th} ${trimmed.last_name_th}` },
     { label: t.auth.register.reviewNameEn, value: `${trimmed.first_name_en} ${trimmed.last_name_en}` },
-    { label: t.auth.register.emailLabel, value: email.trim() },
-    { label: t.auth.register.departmentLabel, value: lookupName(departments, department, language) },
-    { label: t.auth.register.positionLabel, value: lookupName(positions, position, language) },
+    { label: t.auth.register.emailLabel, value: normalizedEmail },
+    { label: t.auth.register.departmentLabel, value: lookupName(departmentRows, departmentId, language) },
+    { label: t.auth.register.positionLabel, value: lookupName(positionRows, positionId, language) },
   ]
 
   return (
@@ -58,7 +119,13 @@ export function RegisterPage() {
       <h2 className="text-2xl font-bold text-ink">{t.auth.register.title}</h2>
       <p className="mb-7 mt-1.5 text-[13.5px] leading-relaxed text-slate">{t.auth.register.subtitle}</p>
 
-      {/* noValidate: the name fields use their own inline, translated errors instead of the browser's bubbles. */}
+      {submitError && (
+        <p role="alert" className="mb-5 rounded-[9px] border border-red-200 bg-red-50 px-3.5 py-2.5 text-[13px] font-semibold text-red-600">
+          {t.auth.register.submitError}
+        </p>
+      )}
+
+      {/* noValidate: fields use their own inline, translated errors instead of the browser's bubbles. */}
       <form className="space-y-[18px]" noValidate onSubmit={handleSubmit}>
         <NameFields
           idPrefix={NAME_ID_PREFIX}
@@ -69,31 +136,59 @@ export function RegisterPage() {
           showAllErrors={submitAttempted}
         />
         <Input
+          id={FIELD_IDS.email}
           label={t.auth.register.emailLabel}
-          type="text"
+          type="email"
+          autoComplete="email"
           placeholder={t.auth.register.emailPlaceholder}
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+          error={errorText('email')}
           icon={<MailIcon />}
         />
 
-        <div className="grid grid-cols-2 gap-4">
-          <Select
-            label={t.auth.register.departmentLabel}
-            options={lookupOptions(departments, language)}
-            value={department}
-            onChange={(event) => setDepartment(event.target.value)}
-          />
-          <Select
-            label={t.auth.register.positionLabel}
-            options={lookupOptions(positions, language)}
-            value={position}
-            onChange={(event) => setPosition(event.target.value)}
-          />
-        </div>
+        {lookupsReady ? (
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label={t.auth.register.departmentLabel}
+              options={lookupOptions(departmentRows, language)}
+              value={String(departmentId)}
+              onChange={(event) => setDepartment(event.target.value)}
+            />
+            <Select
+              label={t.auth.register.positionLabel}
+              options={lookupOptions(positionRows, language)}
+              value={String(positionId)}
+              onChange={(event) => setPosition(event.target.value)}
+            />
+          </div>
+        ) : (
+          <p role={lookupsFailed ? 'alert' : 'status'} className={`text-[13px] ${lookupsFailed ? 'font-semibold text-red-600' : 'text-slate'}`}>
+            {lookupsFailed ? t.auth.register.lookupsError : t.auth.register.lookupsLoading}
+          </p>
+        )}
 
-        <Input label={t.auth.register.passwordLabel} type="password" defaultValue="password123" icon={<LockIcon />} showPasswordToggle />
-        <Input label={t.auth.register.confirmPasswordLabel} type="password" defaultValue="password123" icon={<LockIcon />} />
+        <Input
+          id={FIELD_IDS.password}
+          label={t.auth.register.passwordLabel}
+          type="password"
+          autoComplete="new-password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          error={errorText('password')}
+          icon={<LockIcon />}
+          showPasswordToggle
+        />
+        <Input
+          id={FIELD_IDS.confirm}
+          label={t.auth.register.confirmPasswordLabel}
+          type="password"
+          autoComplete="new-password"
+          value={confirmPassword}
+          onChange={(event) => setConfirmPassword(event.target.value)}
+          error={errorText('confirm')}
+          icon={<LockIcon />}
+        />
 
         <label className="flex items-start gap-2.5 text-[12.5px] leading-[1.55] text-slate">
           <input
@@ -108,7 +203,7 @@ export function RegisterPage() {
           </span>
         </label>
 
-        <Button ref={submitButtonRef} type="submit" variant="primary" fullWidth disabled={!agreedToTerms} icon={<ArrowRightIcon />}>
+        <Button ref={submitButtonRef} type="submit" variant="primary" fullWidth disabled={!agreedToTerms || !lookupsReady} icon={<ArrowRightIcon />}>
           {t.auth.register.createAccountButton}
         </Button>
       </form>

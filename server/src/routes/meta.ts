@@ -31,6 +31,24 @@ metaRouter.get('/years', async (_req, res) => {
   })
 })
 
+/** GET /api/departments — app.departments for the register / profile forms. */
+metaRouter.get('/departments', async (_req, res) => {
+  const rows = await query<{ department_id: number; name_th: string; name_en: string }>(
+    'departments',
+    'select department_id, name_th, name_en from app.departments order by department_id',
+  )
+  res.json(rows)
+})
+
+/** GET /api/positions — app.positions for the register / profile forms. */
+metaRouter.get('/positions', async (_req, res) => {
+  const rows = await query<{ position_id: number; name_th: string; name_en: string }>(
+    'positions',
+    'select position_id, name_th, name_en from app.positions order by position_id',
+  )
+  res.json(rows)
+})
+
 /** GET /api/ops-types — the lookup table with the front end's type keys. */
 metaRouter.get('/ops-types', async (_req, res) => {
   const rows = await query<{ ops_type_id: number; ops_type_name_th: string; ops_type_name_en: string }>(

@@ -6,16 +6,21 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { UserAvatar } from '../components/ui/UserAvatar'
+import { ApiError, apiSend } from '../data/api/client'
+import { lookupName, lookupOptions, useDepartments, usePositions } from '../data/lookups'
 import { useLanguage } from '../i18n/LanguageContext'
 import { focusFirstInvalidName, NAME_FIELDS, trimNames, type NameField } from '../i18n/nameValidation'
 import { formatDisplayName, type PersonNames } from '../i18n/personName'
 import type { Strings } from '../i18n/strings'
-import { departments, lookupName, lookupOptions, positions } from '../mock-auth/organization'
-import { changePassword, saveProfile } from '../mock-auth/saves'
-import { useCurrentUser } from '../state/CurrentUserContext'
+import { useAuth, useSignedInUser, type AuthUser } from '../state/AuthContext'
 import { useToast } from '../state/ToastContext'
 
 const NAME_ID_PREFIX = 'profile-name'
+
+/** A 401 on an account request means the session ended (expired or signed out elsewhere). */
+function isSessionEnded(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401
+}
 
 function pickNames(names: PersonNames): PersonNames {
   return { first_name_th: names.first_name_th, last_name_th: names.last_name_th, first_name_en: names.first_name_en, last_name_en: names.last_name_en }
@@ -73,17 +78,22 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
 
 function ProfileTab() {
   const { t, language } = useLanguage()
-  const { user, updateUser } = useCurrentUser()
+  const user = useSignedInUser()
+  const { setUser, sessionEnded } = useAuth()
   const { showToast } = useToast()
+  const departments = useDepartments()
+  const positions = usePositions()
+  const departmentRows = departments.status === 'ready' ? departments.data : []
   const [names, setNames] = useState<PersonNames>(() => pickNames(user))
-  const [department, setDepartment] = useState(user.department)
+  const [department, setDepartment] = useState(user.department_id)
+  const [saveError, setSaveError] = useState(false)
   const [touched, setTouched] = useState<Partial<Record<NameField, boolean>>>({})
   const [submitAttempted, setSubmitAttempted] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const saveButtonRef = useRef<HTMLButtonElement>(null)
 
   const trimmed = trimNames(names)
-  const departmentLabel = (id: string) => lookupName(departments, id, language)
+  const departmentLabel = (id: number) => lookupName(departmentRows, id, language)
   // Only what actually differs from the saved profile (names compared trimmed).
   const changes: { label: string; before: string; after: string }[] = [
     ...NAME_FIELDS.filter((field) => trimmed[field] !== user[field]).map((field) => ({
@@ -91,8 +101,8 @@ function ProfileTab() {
       before: user[field],
       after: trimmed[field],
     })),
-    ...(department !== user.department
-      ? [{ label: t.account.profileCard.departmentLabel, before: departmentLabel(user.department), after: departmentLabel(department) }]
+    ...(department !== user.department_id
+      ? [{ label: t.account.profileCard.departmentLabel, before: departmentLabel(user.department_id), after: departmentLabel(department) }]
       : []),
   ]
   const hasChanges = changes.length > 0
@@ -101,14 +111,25 @@ function ProfileTab() {
     event.preventDefault()
     if (!hasChanges) return
     setSubmitAttempted(true)
+    setSaveError(false)
     if (focusFirstInvalidName(NAME_ID_PREFIX, names)) return
     setConfirmOpen(true)
   }
 
   async function confirmSave() {
-    await saveProfile()
-    updateUser({ ...trimmed, department })
-    setNames(trimmed)
+    let saved: AuthUser
+    try {
+      ;({ user: saved } = await apiSend<{ user: AuthUser }>('PATCH', 'account/profile', { ...trimmed, department_id: department }))
+    } catch (error) {
+      setConfirmOpen(false)
+      if (isSessionEnded(error)) return sessionEnded()
+      console.error('[account] profile', error)
+      setSaveError(true)
+      return
+    }
+    setUser(saved)
+    setNames(pickNames(saved))
+    setDepartment(saved.department_id)
     setSubmitAttempted(false)
     setTouched({})
     setConfirmOpen(false)
@@ -129,7 +150,13 @@ function ProfileTab() {
         </div>
       </div>
 
-      {/* Field names match the user_profiles columns; no save endpoint exists yet. */}
+      {saveError && (
+        <p role="alert" className="mb-4 rounded-[9px] border border-red-200 bg-red-50 px-3.5 py-2.5 text-[13px] font-semibold text-red-600">
+          {t.account.profileCard.saveError}
+        </p>
+      )}
+
+      {/* Field names match the user_profiles columns (PATCH /api/account/profile). */}
       <form noValidate onSubmit={handleSubmit}>
         <NameFields
           idPrefix={NAME_ID_PREFIX}
@@ -144,14 +171,15 @@ function ProfileTab() {
           <Select
             label={t.account.profileCard.departmentLabel}
             name="department"
-            options={lookupOptions(departments, language)}
-            value={department}
-            onChange={(event) => setDepartment(event.target.value)}
+            options={lookupOptions(departmentRows, language)}
+            value={String(department)}
+            onChange={(event) => setDepartment(Number(event.target.value))}
+            disabled={departmentRows.length === 0}
           />
           <div>
             <span className="mb-1.5 block text-[12.5px] font-semibold text-ink">{t.account.profileCard.positionLabel}</span>
             <span className="inline-flex items-center rounded-[9px] bg-green-100 px-3.5 py-[9px] text-[12.5px] font-bold text-green-800">
-              {lookupName(positions, user.position, language)}
+              {lookupName(positions.status === 'ready' ? positions.data : undefined, user.position_id, language) || '—'}
             </span>
           </div>
         </div>
@@ -217,14 +245,19 @@ const PASSWORD_FIELD_IDS: Record<PasswordField, string> = {
 
 function SecurityTab() {
   const { t } = useLanguage()
+  const { sessionEnded } = useAuth()
   const { showToast } = useToast()
-  const [values, setValues] = useState<Record<PasswordField, string>>({ current: 'password123', next: '', confirm: '' })
+  const [values, setValues] = useState<Record<PasswordField, string>>({ current: '', next: '', confirm: '' })
   const [submitAttempted, setSubmitAttempted] = useState(false)
+  // The current password the server rejected; cleared as soon as it's edited.
+  const [wrongCurrent, setWrongCurrent] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const submitButtonRef = useRef<HTMLButtonElement>(null)
 
   const errors = validatePasswords(values)
   const errorText = (field: PasswordField) => {
+    if (field === 'current' && wrongCurrent !== null && values.current === wrongCurrent) return t.account.securityCard.currentWrong
     const error = errors[field]
     return submitAttempted && error ? t.account.securityCard[error] : undefined
   }
@@ -234,6 +267,7 @@ function SecurityTab() {
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setSubmitAttempted(true)
+    setSaveError(false)
     const firstInvalid = (['current', 'next', 'confirm'] as const).find((field) => errors[field])
     if (firstInvalid) {
       document.getElementById(PASSWORD_FIELD_IDS[firstInvalid])?.focus()
@@ -243,7 +277,21 @@ function SecurityTab() {
   }
 
   async function confirmChange() {
-    await changePassword()
+    try {
+      await apiSend('POST', 'account/password', { current_password: values.current, new_password: values.next })
+    } catch (error) {
+      setConfirmOpen(false)
+      if (isSessionEnded(error)) return sessionEnded()
+      if (error instanceof ApiError && error.code === 'WRONG_CURRENT_PASSWORD') {
+        setWrongCurrent(values.current)
+        window.setTimeout(() => document.getElementById(PASSWORD_FIELD_IDS.current)?.focus())
+      } else {
+        console.error('[account] password', error)
+        setSaveError(true)
+      }
+      return
+    }
+    setWrongCurrent(null)
     setValues({ current: '', next: '', confirm: '' })
     setSubmitAttempted(false)
     setConfirmOpen(false)
@@ -254,6 +302,12 @@ function SecurityTab() {
     <Card>
       <h3 className="mb-1 text-[15px] font-bold text-ink">{t.account.securityCard.title}</h3>
       <p className="mb-[22px] text-[12.5px] text-slate">{t.account.securityCard.subtitle}</p>
+
+      {saveError && (
+        <p role="alert" className="mb-4 rounded-[9px] border border-red-200 bg-red-50 px-3.5 py-2.5 text-[13px] font-semibold text-red-600">
+          {t.account.securityCard.saveError}
+        </p>
+      )}
 
       <form noValidate onSubmit={handleSubmit}>
         <Input

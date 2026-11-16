@@ -6,8 +6,8 @@ import { useLanguage } from '../../i18n/LanguageContext'
 import { useArea } from '../../state/AreaContext'
 import { localizedName } from '../../i18n/localizedName'
 import { districtBoundaries, subDistrictBoundaries } from '../../data/boundaries'
-import type { CurrentUser } from '../../mock-auth/currentUser'
-import { lookupName, positions } from '../../mock-auth/organization'
+import { lookupName, usePositions } from '../../data/lookups'
+import { useAuth, type AuthUser } from '../../state/AuthContext'
 import { useParkSearch } from '../../data/searchHooks'
 import { formatDisplayName } from '../../i18n/personName'
 import { UserAvatar } from '../ui/UserAvatar'
@@ -18,7 +18,7 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   }`
 
 type NavbarProps = {
-  user: CurrentUser
+  user: AuthUser
 }
 
 export function Navbar({ user }: NavbarProps) {
@@ -211,8 +211,11 @@ function SearchGroup({ title, children }: { title: string; children: ReactNode }
   )
 }
 
-function UserMenu({ user }: { user: CurrentUser }) {
+function UserMenu({ user }: { user: AuthUser }) {
   const { t, language } = useLanguage()
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+  const positions = usePositions()
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -244,7 +247,7 @@ function UserMenu({ user }: { user: CurrentUser }) {
         <UserAvatar names={user} />
         <span className="text-left leading-tight">
           <span className="block text-[13px] font-medium">{formatDisplayName(user, language)}</span>
-          <span className="block text-[10.5px] text-[#A9C4B4]">{lookupName(positions, user.position, language)}</span>
+          <span className="block text-[10.5px] text-[#A9C4B4]">{lookupName(positions.status === 'ready' ? positions.data : undefined, user.position_id, language)}</span>
         </span>
         <svg
           width="14"
@@ -274,14 +277,20 @@ function UserMenu({ user }: { user: CurrentUser }) {
           >
             {t.user.accountSettings}
           </Link>
-          <Link
-            to="/login"
+          <button
+            type="button"
             role="menuitem"
-            onClick={() => setIsOpen(false)}
-            className="block px-3.5 py-2 text-[13px] font-medium text-ink hover:bg-green-50"
+            onClick={() => {
+              setIsOpen(false)
+              // The cookie is cleared server-side; the local state drops even if the request fails.
+              logout()
+                .catch((error: unknown) => console.error('[auth] logout', error))
+                .finally(() => navigate('/login', { replace: true }))
+            }}
+            className="block w-full border-none bg-transparent px-3.5 py-2 text-left text-[13px] font-medium text-ink hover:bg-green-50"
           >
             {t.user.signOut}
-          </Link>
+          </button>
         </div>
       )}
     </div>

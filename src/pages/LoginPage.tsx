@@ -1,58 +1,98 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, type FormEvent } from 'react'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { ApiError } from '../data/api/client'
 import { useLanguage } from '../i18n/LanguageContext'
+import { useAuth } from '../state/AuthContext'
+
+/** Router state other pages pass to /login: `registered` after sign-up, `from` = the page to return to. */
+export type LoginLocationState = { registered?: boolean; from?: string } | null
+
+type LoginError = 'fieldsRequired' | 'invalidCredentials' | 'rateLimited' | 'requestFailed'
 
 export function LoginPage() {
   const { t } = useLanguage()
+  const auth = useAuth()
   const navigate = useNavigate()
-  const [rememberMe, setRememberMe] = useState(true)
+  const location = useLocation()
+  const state = location.state as LoginLocationState
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<LoginError | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const returnTo = state?.from?.startsWith('/') && !state.from.startsWith('//') ? state.from : '/map'
+
+  // Already signed in (e.g. the user opened /login in a second tab).
+  if (auth.status === 'signedIn' && !submitting) return <Navigate to={returnTo} replace />
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (submitting) return
+    if (!email.trim() || !password) {
+      setError('fieldsRequired')
+      return
+    }
+    setSubmitting(true)
+    setError(null)
+    try {
+      await auth.login(email.trim(), password)
+      navigate(returnTo, { replace: true })
+    } catch (caught) {
+      // One generic message for a wrong email or a wrong password.
+      setError(caught instanceof ApiError && caught.code === 'INVALID_CREDENTIALS' ? 'invalidCredentials' : caught instanceof ApiError && caught.code === 'RATE_LIMITED' ? 'rateLimited' : 'requestFailed')
+      setPassword('')
+      setSubmitting(false)
+    }
+  }
 
   return (
     <div>
       <h2 className="text-2xl font-bold text-ink">{t.auth.login.title}</h2>
       <p className="mb-7 mt-1.5 text-[13.5px] leading-relaxed text-slate">{t.auth.login.subtitle}</p>
 
-      <form
-        className="space-y-[18px]"
-        onSubmit={(event) => {
-          event.preventDefault()
-          navigate('/map')
-        }}
-      >
+      {state?.registered && !error && (
+        <p role="status" className="mb-5 rounded-[9px] border border-green-100 bg-green-50 px-3.5 py-2.5 text-[13px] font-semibold text-green-800">
+          {t.auth.login.accountCreated}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="mb-5 rounded-[9px] border border-red-200 bg-red-50 px-3.5 py-2.5 text-[13px] font-semibold text-red-600">
+          {t.auth.login[error]}
+        </p>
+      )}
+
+      <form className="space-y-[18px]" noValidate onSubmit={handleSubmit}>
         <Input
           label={t.auth.login.emailLabel}
-          type="text"
+          type="email"
+          name="email"
+          autoComplete="username"
           placeholder={t.auth.login.emailPlaceholder}
-          defaultValue="nisa.p@bma.go.th"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
           icon={<MailIcon />}
         />
         <Input
           label={t.auth.login.passwordLabel}
           type="password"
-          defaultValue="password123"
+          name="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
           icon={<LockIcon />}
           showPasswordToggle
         />
 
-        <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 text-[13px] text-slate">
-            <input
-              type="checkbox"
-              checked={rememberMe}
-              onChange={(event) => setRememberMe(event.target.checked)}
-              className="h-4 w-4 accent-green-700"
-            />
-            {t.auth.login.rememberMe}
-          </label>
+        {/* Password reset isn't wired to the server yet (app.password_reset_tokens is unused); the link still opens the existing page. */}
+        <div className="flex justify-end">
           <Link to="/reset-password" className="text-[13px] font-semibold text-green-700">
             {t.auth.login.forgotPassword}
           </Link>
         </div>
 
-        <Button type="submit" variant="primary" fullWidth icon={<ArrowRightIcon />}>
-          {t.auth.login.signInButton}
+        <Button type="submit" variant="primary" fullWidth icon={<ArrowRightIcon />} aria-disabled={submitting}>
+          {submitting ? t.auth.login.signingIn : t.auth.login.signInButton}
         </Button>
       </form>
 

@@ -1,9 +1,15 @@
 /** An error the client caused (bad parameter, unknown id) — sent as JSON with its status, not logged as a server fault. */
 export class HttpError extends Error {
   readonly status: number
-  constructor(status: number, message: string) {
+  /** Machine-readable reason the client translates (EN/TH), e.g. EMAIL_TAKEN. */
+  readonly code?: string
+  /** Per-field validation codes, e.g. { first_name_th: 'invalidThai' }. */
+  readonly fields?: Record<string, string>
+  constructor(status: number, message: string, code?: string, fields?: Record<string, string>) {
     super(message)
     this.status = status
+    this.code = code
+    this.fields = fields
   }
 }
 
