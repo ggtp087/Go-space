@@ -1,11 +1,42 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { NameFields } from '../components/forms/NameFields'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
+import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
+import { UserAvatar } from '../components/ui/UserAvatar'
 import { useLanguage } from '../i18n/LanguageContext'
-import { currentUser } from '../mock/currentUser'
-import { departmentOptions } from '../mock/organization'
+import { focusFirstInvalidName, NAME_FIELDS, trimNames, type NameField } from '../i18n/nameValidation'
+import { formatDisplayName, type PersonNames } from '../i18n/personName'
+import type { Strings } from '../i18n/strings'
+import { departments, lookupName, lookupOptions, positions } from '../mock/organization'
+import { useCurrentUser } from '../state/CurrentUserContext'
+import { useToast } from '../state/ToastContext'
+
+const NAME_ID_PREFIX = 'profile-name'
+
+/** Stand-ins for the profile/password requests until a backend exists. */
+function saveProfile(): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, 700))
+}
+function changePassword(): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, 700))
+}
+
+function pickNames(names: PersonNames): PersonNames {
+  return { first_name_th: names.first_name_th, last_name_th: names.last_name_th, first_name_en: names.first_name_en, last_name_en: names.last_name_en }
+}
+
+function nameLabel(field: NameField, t: Strings): string {
+  const labels: Record<NameField, string> = {
+    first_name_th: t.personName.firstNameTh,
+    last_name_th: t.personName.lastNameTh,
+    first_name_en: t.personName.firstNameEn,
+    last_name_en: t.personName.lastNameEn,
+  }
+  return labels[field]
+}
 
 type Tab = 'profile' | 'security'
 
@@ -48,82 +79,242 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
 }
 
 function ProfileTab() {
-  const { t } = useLanguage()
-  const [firstName, setFirstName] = useState(currentUser.firstName)
-  const [lastName, setLastName] = useState(currentUser.lastName)
-  const [department, setDepartment] = useState(
-    departmentOptions.find((option) => option.label === currentUser.department)?.value ?? departmentOptions[0].value,
-  )
+  const { t, language } = useLanguage()
+  const { user, updateUser } = useCurrentUser()
+  const { showToast } = useToast()
+  const [names, setNames] = useState<PersonNames>(() => pickNames(user))
+  const [department, setDepartment] = useState(user.department)
+  const [touched, setTouched] = useState<Partial<Record<NameField, boolean>>>({})
+  const [submitAttempted, setSubmitAttempted] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const saveButtonRef = useRef<HTMLButtonElement>(null)
+
+  const trimmed = trimNames(names)
+  const departmentLabel = (id: string) => lookupName(departments, id, language)
+  // Only what actually differs from the saved profile (names compared trimmed).
+  const changes: { label: string; before: string; after: string }[] = [
+    ...NAME_FIELDS.filter((field) => trimmed[field] !== user[field]).map((field) => ({
+      label: nameLabel(field, t),
+      before: user[field],
+      after: trimmed[field],
+    })),
+    ...(department !== user.department
+      ? [{ label: t.account.profileCard.departmentLabel, before: departmentLabel(user.department), after: departmentLabel(department) }]
+      : []),
+  ]
+  const hasChanges = changes.length > 0
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (!hasChanges) return
+    setSubmitAttempted(true)
+    if (focusFirstInvalidName(NAME_ID_PREFIX, names)) return
+    setConfirmOpen(true)
+  }
+
+  async function confirmSave() {
+    await saveProfile()
+    updateUser({ ...trimmed, department })
+    setNames(trimmed)
+    setSubmitAttempted(false)
+    setTouched({})
+    setConfirmOpen(false)
+    showToast(t.account.profileCard.successToast)
+  }
 
   return (
     <Card>
       <h3 className="mb-1 text-[15px] font-bold text-ink">{t.account.profileCard.title}</h3>
-      <p className="mb-[22px] text-[12.5px] text-slate">{t.account.profileCard.subtitle}</p>
+      <p className="mb-[18px] text-[12.5px] text-slate">{t.account.profileCard.subtitle}</p>
 
-      {/* Field names match the user table columns; no save endpoint exists yet. */}
-      <form onSubmit={(event) => event.preventDefault()}>
-        <div className="grid grid-cols-2 gap-4">
-          <Input
-            label={t.account.profileCard.firstNameLabel}
-            name="first_name"
-            type="text"
-            value={firstName}
-            onChange={(event) => setFirstName(event.target.value)}
-          />
-          <Input
-            label={t.account.profileCard.lastNameLabel}
-            name="last_name"
-            type="text"
-            value={lastName}
-            onChange={(event) => setLastName(event.target.value)}
-          />
-          <Input label={t.account.profileCard.emailLabel} name="email" type="text" defaultValue={currentUser.email} disabled />
+      {/* The saved profile as it appears across the app — same helper as the navbar. */}
+      <div className="mb-[22px] flex items-center gap-3 rounded-[10px] bg-bg px-3.5 py-3">
+        <UserAvatar names={user} size={40} />
+        <div className="min-w-0 leading-tight">
+          <p className="truncate text-[14px] font-bold text-ink">{formatDisplayName(user, language)}</p>
+          <p className="truncate text-[12px] text-slate">{user.email}</p>
+        </div>
+      </div>
+
+      {/* Field names match the user_profiles columns; no save endpoint exists yet. */}
+      <form noValidate onSubmit={handleSubmit}>
+        <NameFields
+          idPrefix={NAME_ID_PREFIX}
+          values={names}
+          onChange={(field, value) => setNames((current) => ({ ...current, [field]: value }))}
+          touched={touched}
+          onBlur={(field) => setTouched((current) => ({ ...current, [field]: true }))}
+          showAllErrors={submitAttempted}
+        />
+        <div className="mt-4 grid grid-cols-2 gap-4">
+          <Input label={t.account.profileCard.emailLabel} name="email" type="text" value={user.email} disabled />
           <Select
             label={t.account.profileCard.departmentLabel}
             name="department"
-            options={departmentOptions}
+            options={lookupOptions(departments, language)}
             value={department}
             onChange={(event) => setDepartment(event.target.value)}
           />
           <div>
             <span className="mb-1.5 block text-[12.5px] font-semibold text-ink">{t.account.profileCard.positionLabel}</span>
             <span className="inline-flex items-center rounded-[9px] bg-green-100 px-3.5 py-[9px] text-[12.5px] font-bold text-green-800">
-              {t.user.role}
+              {lookupName(positions, user.position, language)}
             </span>
           </div>
         </div>
 
-        <div className="mt-4 flex justify-end border-t border-line pt-[18px]">
-          <Button type="submit" variant="primary">
+        <div className="mt-4 flex items-center justify-end gap-3 border-t border-line pt-[18px]">
+          {!hasChanges && <span className="text-[12px] text-mist">{t.account.profileCard.noChangesHint}</span>}
+          {/* aria-disabled, not disabled: after a save the button is "disabled"
+              again, and focus must still be able to return to it from the dialog.
+              handleSubmit ignores it while there's nothing to save. */}
+          <Button ref={saveButtonRef} type="submit" variant="primary" aria-disabled={!hasChanges}>
             {t.account.profileCard.saveChanges}
           </Button>
         </div>
       </form>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={t.account.profileCard.confirmTitle}
+        description={t.account.profileCard.confirmDescription}
+        confirmLabel={t.account.profileCard.saveChanges}
+        busyLabel={t.account.profileCard.saving}
+        cancelLabel={t.account.profileCard.cancel}
+        onConfirm={confirmSave}
+        onCancel={() => setConfirmOpen(false)}
+        returnFocusRef={saveButtonRef}
+      >
+        <p className="mb-1.5 text-right text-[11.5px] font-semibold text-mist">{t.account.profileCard.beforeAfter}</p>
+        <dl className="divide-y divide-line rounded-[10px] border border-line text-[13px]">
+          {changes.map((change) => (
+            <div key={change.label} className="px-3.5 py-2.5">
+              <dt className="text-[12px] text-slate">{change.label}</dt>
+              <dd className="mt-0.5 flex flex-wrap items-center gap-x-2 break-words">
+                <span className="text-slate line-through decoration-mist">{change.before}</span>
+                <span aria-hidden="true" className="text-mist">→</span>
+                <span className="font-semibold text-ink">{change.after}</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </ConfirmDialog>
     </Card>
   )
 }
 
+type PasswordField = 'current' | 'next' | 'confirm'
+type PasswordError = 'currentRequired' | 'newTooWeak' | 'newSameAsCurrent' | 'confirmMismatch'
+
+// Matches the card's own rule: at least 10 characters, a number, and a symbol.
+function validatePasswords(values: Record<PasswordField, string>): Record<PasswordField, PasswordError | null> {
+  const strong = values.next.length >= 10 && /\d/.test(values.next) && /[^A-Za-z0-9]/.test(values.next)
+  return {
+    current: values.current ? null : 'currentRequired',
+    next: !strong ? 'newTooWeak' : values.next === values.current ? 'newSameAsCurrent' : null,
+    confirm: values.confirm === values.next ? null : 'confirmMismatch',
+  }
+}
+
+const PASSWORD_FIELD_IDS: Record<PasswordField, string> = {
+  current: 'password-current',
+  next: 'password-new',
+  confirm: 'password-confirm',
+}
+
 function SecurityTab() {
   const { t } = useLanguage()
+  const { showToast } = useToast()
+  const [values, setValues] = useState<Record<PasswordField, string>>({ current: 'password123', next: '', confirm: '' })
+  const [submitAttempted, setSubmitAttempted] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const submitButtonRef = useRef<HTMLButtonElement>(null)
+
+  const errors = validatePasswords(values)
+  const errorText = (field: PasswordField) => {
+    const error = errors[field]
+    return submitAttempted && error ? t.account.securityCard[error] : undefined
+  }
+  const setField = (field: PasswordField) => (event: ChangeEvent<HTMLInputElement>) =>
+    setValues((current) => ({ ...current, [field]: event.target.value }))
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    setSubmitAttempted(true)
+    const firstInvalid = (['current', 'next', 'confirm'] as const).find((field) => errors[field])
+    if (firstInvalid) {
+      document.getElementById(PASSWORD_FIELD_IDS[firstInvalid])?.focus()
+      return
+    }
+    setConfirmOpen(true)
+  }
+
+  async function confirmChange() {
+    await changePassword()
+    setValues({ current: '', next: '', confirm: '' })
+    setSubmitAttempted(false)
+    setConfirmOpen(false)
+    showToast(t.account.securityCard.successToast)
+  }
 
   return (
     <Card>
       <h3 className="mb-1 text-[15px] font-bold text-ink">{t.account.securityCard.title}</h3>
       <p className="mb-[22px] text-[12.5px] text-slate">{t.account.securityCard.subtitle}</p>
 
-      <Input label={t.account.securityCard.currentPasswordLabel} type="password" defaultValue="password123" className="mb-4" />
-      <div className="grid grid-cols-2 gap-4">
-        <Input label={t.account.securityCard.newPasswordLabel} type="password" placeholder={t.account.securityCard.newPasswordPlaceholder} />
+      <form noValidate onSubmit={handleSubmit}>
         <Input
-          label={t.account.securityCard.confirmNewPasswordLabel}
+          id={PASSWORD_FIELD_IDS.current}
+          label={t.account.securityCard.currentPasswordLabel}
           type="password"
-          placeholder={t.account.securityCard.confirmNewPasswordPlaceholder}
+          autoComplete="current-password"
+          value={values.current}
+          onChange={setField('current')}
+          error={errorText('current')}
+          className="mb-4"
         />
-      </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            id={PASSWORD_FIELD_IDS.next}
+            label={t.account.securityCard.newPasswordLabel}
+            type="password"
+            autoComplete="new-password"
+            placeholder={t.account.securityCard.newPasswordPlaceholder}
+            value={values.next}
+            onChange={setField('next')}
+            error={errorText('next')}
+          />
+          <Input
+            id={PASSWORD_FIELD_IDS.confirm}
+            label={t.account.securityCard.confirmNewPasswordLabel}
+            type="password"
+            autoComplete="new-password"
+            placeholder={t.account.securityCard.confirmNewPasswordPlaceholder}
+            value={values.confirm}
+            onChange={setField('confirm')}
+            error={errorText('confirm')}
+          />
+        </div>
 
-      <div className="mt-4 flex justify-end border-t border-line pt-[18px]">
-        <Button variant="primary">{t.account.securityCard.updatePassword}</Button>
-      </div>
+        <div className="mt-4 flex justify-end border-t border-line pt-[18px]">
+          <Button ref={submitButtonRef} type="submit" variant="primary">
+            {t.account.securityCard.updatePassword}
+          </Button>
+        </div>
+      </form>
+
+      {/* Never shows the password itself. */}
+      <ConfirmDialog
+        open={confirmOpen}
+        title={t.account.securityCard.confirmTitle}
+        description={t.account.securityCard.confirmDescription}
+        confirmLabel={t.account.securityCard.confirmButton}
+        busyLabel={t.account.securityCard.changing}
+        cancelLabel={t.account.securityCard.cancel}
+        onConfirm={confirmChange}
+        onCancel={() => setConfirmOpen(false)}
+        returnFocusRef={submitButtonRef}
+      />
     </Card>
   )
 }

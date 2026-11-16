@@ -68,6 +68,11 @@ function resolveStrings(language: Language): Strings {
       profileCard: { ...en.account.profileCard, ...th.account?.profileCard },
       securityCard: { ...en.account.securityCard, ...th.account?.securityCard },
     },
+    personName: {
+      ...en.personName,
+      ...th.personName,
+      errors: { ...en.personName.errors, ...th.personName?.errors },
+    },
   }
 }
 

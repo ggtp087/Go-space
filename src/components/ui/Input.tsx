@@ -22,6 +22,7 @@ export function Input({
   const { t } = useLanguage()
   const generatedId = useId()
   const inputId = id ?? generatedId
+  const errorId = `${inputId}-error`
   const [revealed, setRevealed] = useState(false)
   const isPassword = type === 'password'
   const resolvedType = isPassword && showPasswordToggle ? (revealed ? 'text' : 'password') : type
@@ -39,6 +40,8 @@ export function Input({
           {...rest}
           id={inputId}
           type={resolvedType}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
           className={`h-11 w-full rounded-[9px] border-[1.5px] text-[14px] text-ink outline-none placeholder:text-[#A9B4AC] focus:border-green-600 disabled:cursor-not-allowed disabled:border-line-2 disabled:bg-bg disabled:text-slate ${
             error ? 'border-red-400' : 'border-line-2'
           } ${icon ? 'pl-10' : 'pl-3.5'} ${isPassword && showPasswordToggle ? 'pr-10' : 'pr-3.5'}`}
@@ -54,7 +57,11 @@ export function Input({
           </button>
         )}
       </div>
-      {error && <p className="mt-1.5 text-xs font-medium text-red-500">{error}</p>}
+      {error && (
+        <p id={errorId} className="mt-1.5 text-xs font-medium text-red-500">
+          {error}
+        </p>
+      )}
     </div>
   )
 }

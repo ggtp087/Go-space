@@ -7,30 +7,18 @@ import { useArea } from '../../state/AreaContext'
 import { localizedName } from '../../mock/areas'
 import { mockDistrictBoundaries, mockSubDistrictBoundaries } from '../../mock/mapBoundaries'
 import { publicSpaces } from '../../mock/nearbySpaces'
+import type { CurrentUser } from '../../mock/currentUser'
+import { lookupName, positions } from '../../mock/organization'
+import { formatDisplayName } from '../../i18n/personName'
+import { UserAvatar } from '../ui/UserAvatar'
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `inline-flex items-center rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
     isActive ? 'bg-white/14 text-white font-semibold' : 'text-[#CFE3D6] hover:bg-white/8 hover:text-white'
   }`
 
-// Matches the users/user_profiles columns we have — no separate "name" or
-// "initials" field exists in the schema, so those are derived where shown.
-type CurrentUser = {
-  firstName: string
-  lastName: string
-  position: string
-}
-
 type NavbarProps = {
   user: CurrentUser
-}
-
-function getInitials(user: CurrentUser): string {
-  return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
-}
-
-function getDisplayName(user: CurrentUser): string {
-  return `${user.firstName} ${user.lastName.charAt(0)}.`
 }
 
 export function Navbar({ user }: NavbarProps) {
@@ -223,7 +211,7 @@ function SearchGroup({ title, children }: { title: string; children: ReactNode }
 }
 
 function UserMenu({ user }: { user: CurrentUser }) {
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -252,12 +240,10 @@ function UserMenu({ user }: { user: CurrentUser }) {
         aria-expanded={isOpen}
         className="flex items-center gap-2 border-none bg-transparent text-white"
       >
-        <span className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full bg-accent-500 text-xs font-bold text-white">
-          {getInitials(user)}
-        </span>
+        <UserAvatar names={user} />
         <span className="text-left leading-tight">
-          <span className="block text-[13px] font-medium">{getDisplayName(user)}</span>
-          <span className="block text-[10.5px] text-[#A9C4B4]">{t.user.role}</span>
+          <span className="block text-[13px] font-medium">{formatDisplayName(user, language)}</span>
+          <span className="block text-[10.5px] text-[#A9C4B4]">{lookupName(positions, user.position, language)}</span>
         </span>
         <svg
           width="14"
