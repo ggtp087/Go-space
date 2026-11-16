@@ -19,7 +19,7 @@ import type { Strings } from '../i18n/strings'
 import { useYear } from '../state/YearContext'
 import { useArea } from '../state/AreaContext'
 import type { AreaLevel } from '../mock/areas'
-import { accessibilityColor, formatPct } from '../mock/areas'
+import { accessibilityColor, formatPct, formatPctNumber, PCT_DECIMALS } from '../mock/areas'
 import { comparisonPalette } from '../config/mapStyle'
 import { isPendingYear } from '../data/yearStatus'
 import { DataStateNotice } from '../components/ui/DataStateNotice'
@@ -373,11 +373,12 @@ export function ComparePage() {
           <div>
             <p className="mb-1.5 text-[12.5px] font-semibold text-ink">{t.compare.metricOpsShare}</p>
             {mode === 'districts' ? (
-              <ComparisonTrendChart series={comparisonShareSeries} mode={trendValueMode} selectedYear={year} language={language} t={t} height={300} />
+              <ComparisonTrendChart series={comparisonShareSeries} mode={trendValueMode} selectedYear={year} language={language} t={t} decimals={PCT_DECIMALS.share_ops_pct} height={300} />
             ) : (
               <TrendChart
                 points={yearsShareSeries}
                 selectedYears={selectedYears}
+                formatValue={(value) => formatPctNumber(value, PCT_DECIMALS.share_ops_pct)}
                 yMin={yearsShareAxis.min}
                 yMax={yearsShareAxis.max}
                 yTicks={yearsShareAxis.ticks}
@@ -480,7 +481,7 @@ export function ComparePage() {
                         style={{ width: `${Math.min(100, Math.max(0, item.row.share_ops_pct))}%`, background: item.color }}
                       />
                     </div>
-                    <span className="flex-none text-[12.5px] font-bold text-ink tabular-nums">{formatPct(item.row.share_ops_pct)}</span>
+                    <span className="flex-none text-[12.5px] font-bold text-ink tabular-nums">{formatPct(item.row.share_ops_pct, PCT_DECIMALS.share_ops_pct)}</span>
                   </div>
                 </div>
               </>

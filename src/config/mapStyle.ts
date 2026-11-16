@@ -92,16 +92,18 @@ export const mapStyle = {
       open_space: '#F28E2B',
       sports_ground: '#9333EA',
     } satisfies Record<OpsType, string>,
-    // Bubble radius scales with the point's own area_sqm (sqrt, so AREA —
-    // not radius — is proportional to the real area), clamped so a handful
-    // of outliers can't blow the scale out for everything else. Floor is
-    // 5, not a literal 4, so the smallest points still keep a workable
-    // click target (Leaflet's canvas circleMarker hit area is its own
-    // drawn radius — there's no separate hit-tolerance to pad it with).
-    minRadius: 5,
-    maxRadius: 18,
-    minAreaSqm: 1_000,
-    maxAreaSqm: 60_000,
+    // Bubble radius scales with the point's own area_sqm on a sqrt scale
+    // (so AREA, not radius, grows with the real area), fitted to the real
+    // range of spatial.open_public_spaces.ops_area_sqm: 22 m² (smallest
+    // sports ground) to 1,105,845 m² (largest public park). Most OPS are
+    // small (median ~1,000 m²) and sit near the minimum radius; large parks
+    // now differ visibly instead of all hitting a 60,000 m² cap. The 4 px
+    // floor keeps the smallest points clickable (Leaflet's circleMarker hit
+    // area is its own drawn radius). Values outside the range are clamped.
+    minRadius: 4,
+    maxRadius: 26,
+    minAreaSqm: 22,
+    maxAreaSqm: 1_105_845,
     // Applied to whichever point is currently selected — a thicker, darker
     // ring on top of its own radius/fill, not a size change.
     selectedColor: '#111827',

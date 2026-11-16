@@ -3,7 +3,7 @@ import { getSeriesTextColor } from '../../config/mapStyle'
 import { formatYear } from '../../i18n/formatYear'
 import type { Language } from '../../i18n/LanguageContext'
 import type { Strings } from '../../i18n/strings'
-import { formatPct } from '../../mock/areas'
+import { formatPct, formatPctChange } from '../../mock/areas'
 import type { Year } from '../../mock/years'
 import { computeSignedAxis, computeTrendYAxis, pickLabelIndices } from './trendAxis'
 import { useChartWidth } from './useChartWidth'
@@ -20,20 +20,16 @@ type ComparisonTrendChartProps = {
   language: Language
   t: Strings
   height?: number
+  /** Display precision (PCT_DECIMALS) — 2 for share of OPS, 1 for accessibility. */
+  decimals?: number
 }
 
 const MARGIN = { top: 16, right: 132, bottom: 24, left: 40 }
 const END_LABEL_MIN_GAP = 15
 
-function round1(value: number): number {
-  return Math.round(value * 10) / 10
-}
-
-/** "+4.2 pp" / "−1.0 pp" / "0.0 pp" — change mode's own value format (formatPct's "%" suffix doesn't apply to a signed point difference). */
-function formatChange(value: number, pointsUnit: string): string {
-  const rounded = round1(value)
-  const sign = rounded > 0 ? '+' : rounded < 0 ? '−' : ''
-  return `${sign}${Math.abs(rounded).toFixed(1)} ${pointsUnit}`
+/** "+4.2 pp" / "−1.0 pp" / "0.00 pp" — change mode's own value format (formatPct's "%" suffix doesn't apply to a signed point difference). */
+function formatChange(value: number, pointsUnit: string, decimals: number): string {
+  return `${formatPctChange(value, decimals)} ${pointsUnit}`
 }
 
 // Real district/sub-district names can be long ("Phraborom Maharatchawang");
@@ -63,7 +59,7 @@ function declutterY<T extends { y: number }>(items: T[], minGap: number): T[] {
  * features (actual/change toggle, right-edge end labels, hover guide +
  * all-series tooltip) can't change TrendChart's behavior for Dashboard.
  */
-export function ComparisonTrendChart({ series, mode, selectedYear, language, t, height = 300 }: ComparisonTrendChartProps) {
+export function ComparisonTrendChart({ series, mode, selectedYear, language, t, height = 300, decimals = 1 }: ComparisonTrendChartProps) {
   const { ref, width } = useChartWidth(700)
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
 
@@ -83,7 +79,7 @@ export function ComparisonTrendChart({ series, mode, selectedYear, language, t, 
       points:
         mode === 'actual'
           ? s.points
-          : s.points.map((p) => ({ year: p.year, value: p.value === null || base === null ? null : round1(p.value - base) })),
+          : s.points.map((p) => ({ year: p.year, value: p.value === null || base === null ? null : p.value - base })),
     }
   })
 
@@ -92,7 +88,8 @@ export function ComparisonTrendChart({ series, mode, selectedYear, language, t, 
   const yRange = Math.max(axis.max - axis.min, 0.001)
   const yAt = (value: number) => MARGIN.top + plotHeight - ((value - axis.min) / yRange) * plotHeight
 
-  const formatValue = (value: number) => (mode === 'actual' ? formatPct(value) : formatChange(value, t.dashboard.trend.pointsAbbrev))
+  const formatValue = (value: number) =>
+    mode === 'actual' ? formatPct(value, decimals) : formatChange(value, t.dashboard.trend.pointsAbbrev, decimals)
 
   const selectedIndex = years.findIndex((y) => y === selectedYear)
   const labeledYearIndices = new Set(pickLabelIndices(years.length, plotWidth))

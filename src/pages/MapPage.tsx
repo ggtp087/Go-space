@@ -52,7 +52,7 @@ import type { Strings } from '../i18n/strings'
 import { useYear } from '../state/YearContext'
 import { useArea } from '../state/AreaContext'
 import { basemapOptions } from '../mock/basemaps'
-import { formatPct, localizedName } from '../mock/areas'
+import { formatPct, localizedName, PCT_DECIMALS } from '../mock/areas'
 import { BANGKOK_AREA_ID, areaHasAnyData, getAreaMeta, getAreaRow, getMetricSeries } from '../mock/assessmentResults'
 import { mapLayers } from '../mock/mapLayers'
 import { MIN_LABEL_FOOTPRINT_PX, escapeLabelText, estimateLabelBox, labelBoxesOverlap, type LabelBox } from '../components/map/labelPlacement'
@@ -840,7 +840,7 @@ export function MapPage() {
               <SectionTitle>{t.map.sdgSectionTitle}</SectionTitle>
               <ProgressBar
                 label={t.map.openSpaceShareLabel}
-                valueLabel={formatPct(focusRow.share_ops_pct)}
+                valueLabel={formatPct(focusRow.share_ops_pct, PCT_DECIMALS.share_ops_pct)}
                 value={focusRow.share_ops_pct}
               />
             </div>
@@ -1234,8 +1234,11 @@ function MapLegendCard({
   )
 }
 
-const OPS_SIZE_LEGEND_SQM = [1_000, 10_000, 50_000]
-const SIZE_LEGEND_BOX = 40
+// Real reference sizes: a typical 15-minute park / sports ground (~1,000 m²),
+// a mid-size park (100,000 m²), and the largest parks (~1 km²).
+const OPS_SIZE_LEGEND_SQM = [1_000, 100_000, 1_000_000]
+// Fits the largest legend circle (radius ≈ maxRadius) plus its stroke.
+const SIZE_LEGEND_BOX = 2 * mapStyle.opsPoint.maxRadius + 4
 
 /** 3 reference bubbles (by real OPS area, in m²) at the same radius the map's own points use, so the legend never drifts out of sync with what's actually drawn. */
 function OpsSizeLegend({ label, language }: { label: string; language: Language }) {

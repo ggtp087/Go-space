@@ -1,6 +1,6 @@
 import { KPI_ICONS } from './kpiIcons'
 import { computeCountAxis } from './trendAxis'
-import { formatPct } from '../../mock/areas'
+import { formatPct, PCT_DECIMALS } from '../../mock/areas'
 import { totalOpsCount, type AreaRow } from '../../mock/assessmentResults'
 import type { Strings } from '../../i18n/strings'
 
@@ -13,6 +13,8 @@ type CompareKpiConfig = {
   heading: string
   tone: 'green' | 'amber'
   format: MetricFormat
+  /** Percent precision (PCT_DECIMALS); defaults to 1. */
+  decimals?: number
   getValue: (row: AreaRow) => number
 }
 
@@ -30,7 +32,7 @@ function buildConfigs(t: Strings): CompareKpiConfig[] {
       getValue: (row) => Math.round(row.total_population - row.population_with_access),
     },
     { id: 'spaces', heading: t.dashboard.kpi.spacesHeading, tone: 'green', format: 'count', getValue: (row) => totalOpsCount(row.ops_count) },
-    { id: 'opsShare', heading: t.dashboard.kpi.opsShareHeading, tone: 'green', format: 'percent', getValue: (row) => row.share_ops_pct },
+    { id: 'opsShare', heading: t.dashboard.kpi.opsShareHeading, tone: 'green', format: 'percent', decimals: PCT_DECIMALS.share_ops_pct, getValue: (row) => row.share_ops_pct },
   ]
 }
 
@@ -90,7 +92,7 @@ function CompareKpiMiniChart({ config, items, pendingLabel }: { config: CompareK
                   style={{ height: Math.max(3, (value / axisMax) * (MINI_CHART_HEIGHT - 18)), background: item.color }}
                 >
                   <span className="absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9.5px] font-bold text-ink tabular-nums">
-                    {config.format === 'percent' ? formatPct(value) : value.toLocaleString()}
+                    {config.format === 'percent' ? formatPct(value, config.decimals ?? 1) : value.toLocaleString()}
                   </span>
                 </div>
               )}

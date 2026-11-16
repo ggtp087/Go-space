@@ -1,5 +1,5 @@
 import { BANGKOK_AREA_ID, getAssessmentResult, totalOpsCount } from './assessmentResults'
-import { formatPct } from './areas'
+import { formatPct, PCT_DECIMALS } from './areas'
 import type { Year } from './years'
 
 export type KpiSample = {
@@ -9,9 +9,10 @@ export type KpiSample = {
   tone: 'green' | 'amber'
 }
 
-/** Citywide KPIs — rolled up from the one area dataset (Bangkok = sum of every sub-district), never a separate anchor. */
+/** Citywide KPIs — rolled up from the one area dataset (Bangkok = sum of every sub-district), never a separate anchor. Empty for a year without results (pending registry data). */
 export function getKpisForYear(year: Year): KpiSample[] {
-  const bangkok = getAssessmentResult(BANGKOK_AREA_ID, year)!
+  const bangkok = getAssessmentResult(BANGKOK_AREA_ID, year)
+  if (!bangkok) return []
   const totalPopulation = Math.round(bangkok.total_population)
   const covered = Math.round(bangkok.population_with_access)
   const notCovered = totalPopulation - covered
@@ -29,7 +30,7 @@ export function getKpisForYear(year: Year): KpiSample[] {
     { id: 'spaces', value: spaces.toLocaleString(), label: 'Open public spaces mapped citywide', tone: 'green' },
     {
       id: 'opsShare',
-      value: formatPct(bangkok.share_ops_pct),
+      value: formatPct(bangkok.share_ops_pct, PCT_DECIMALS.share_ops_pct),
       label: 'Open public space share (SDG 11.7.1)',
       tone: 'green',
     },

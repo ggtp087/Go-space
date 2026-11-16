@@ -1,4 +1,4 @@
-import { formatPct, roundPct } from '../../mock/areas'
+import { formatPct, PCT_DECIMALS, roundPct } from '../../mock/areas'
 import { estimateLabelBox, labelBoxesOverlap, type LabelBox } from '../map/labelPlacement'
 import { computeTrendYAxis } from './trendAxis'
 import { useChartWidth } from './useChartWidth'
@@ -217,7 +217,7 @@ export function AccessShareScatter({
                   strokeOpacity={isSelected ? 1 : isHighlighted ? 0.6 : 0.15}
                 >
                   <title>
-                    {row.name}: {axisLabels.x} {formatPct(row.share_ops_pct)}, {axisLabels.y} {formatPct(row.access_pct)}, {populationLabel}{' '}
+                    {row.name}: {axisLabels.x} {formatPct(row.share_ops_pct, PCT_DECIMALS.share_ops_pct)}, {axisLabels.y} {formatPct(row.access_pct)}, {populationLabel}{' '}
                     {Math.round(row.total_population).toLocaleString()}
                   </title>
                 </circle>

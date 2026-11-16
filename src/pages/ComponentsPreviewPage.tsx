@@ -16,7 +16,7 @@ import { DataTable, type DataTableColumn } from '../components/ui/DataTable'
 import { YearSelect } from '../components/ui/YearSelect'
 import { useLanguage } from '../i18n/LanguageContext'
 import { getKpisForYear } from '../mock/kpis'
-import { accessibilityColor, formatPct } from '../mock/areas'
+import { accessibilityColor, formatPct, PCT_DECIMALS } from '../mock/areas'
 import {
   getDefaultComparisonAreas,
   getAreaRowsForYear,
@@ -25,7 +25,8 @@ import {
   type AreaRow,
 } from '../mock/assessmentResults'
 import { accessibilityLegendSteps } from '../mock/accessibilityLegend'
-import { availableYears, defaultYear, type Year } from '../mock/years'
+import { availableYears, type Year } from '../mock/years'
+import { getInitialYear } from '../data/yearStatus'
 import { opsTypeValues } from '../config/opsTypes'
 
 // Purely presentational — this page is dev-only scaffolding for checking
@@ -100,7 +101,7 @@ const TABLE_COLUMNS: DataTableColumn<AreaRow>[] = [
     sortValue: (row) => totalOpsCount(row.ops_count),
     render: (row) => totalOpsCount(row.ops_count),
   },
-  { key: 'share_ops_pct', header: 'OPS share %', sortable: true, align: 'right', render: (row) => formatPct(row.share_ops_pct) },
+  { key: 'share_ops_pct', header: 'OPS share %', sortable: true, align: 'right', render: (row) => formatPct(row.share_ops_pct, PCT_DECIMALS.share_ops_pct) },
 ]
 
 export function ComponentsPreviewPage() {
@@ -115,7 +116,7 @@ export function ComponentsPreviewPage() {
   const [range, setRange] = useState<[number, number]>([22, 85])
   const [panelCollapsed, setPanelCollapsed] = useState(false)
   const [district, setDistrict] = useState(districtOptions[0].value)
-  const [previewYear, setPreviewYear] = useState<Year>(defaultYear)
+  const [previewYear, setPreviewYear] = useState<Year>(getInitialYear)
 
   const districtRows = getAreaRowsForYear('district', previewYear, language)
   const featuredDistrict = districtRows[0]!
@@ -244,7 +245,7 @@ export function ComponentsPreviewPage() {
 
         <Section title="ProgressBar">
           <div className="max-w-md space-y-3">
-            <ProgressBar label="OPS Share" valueLabel={formatPct(featuredDistrict.share_ops_pct)} value={featuredDistrict.share_ops_pct} />
+            <ProgressBar label="OPS Share" valueLabel={formatPct(featuredDistrict.share_ops_pct, PCT_DECIMALS.share_ops_pct)} value={featuredDistrict.share_ops_pct} />
             <ProgressBar label="Accessibility" valueLabel={`${Math.round(featuredDistrict.access_pct)}%`} value={featuredDistrict.access_pct} color={accessibilityColor(featuredDistrict.access_pct)} size="sm" />
           </div>
         </Section>

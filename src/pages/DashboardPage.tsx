@@ -26,7 +26,7 @@ import { useLanguage } from '../i18n/LanguageContext'
 import type { Strings } from '../i18n/strings'
 import { useYear } from '../state/YearContext'
 import { useArea } from '../state/AreaContext'
-import { accessibilityColor, formatPct, getAccessibilityBrackets } from '../mock/areas'
+import { accessibilityColor, formatPct, formatPctNumber, getAccessibilityBrackets, PCT_DECIMALS, roundPct } from '../mock/areas'
 import { availableYears, type Year } from '../mock/years'
 import {
   BANGKOK_AREA_ID,
@@ -87,17 +87,13 @@ function buildKpis(row: AreaRow, t: Strings): KpiCardConfig[] {
     },
     {
       id: 'opsShare',
-      value: formatPct(row.share_ops_pct),
+      value: formatPct(row.share_ops_pct, PCT_DECIMALS.share_ops_pct),
       heading: t.dashboard.kpi.opsShareHeading,
       description: t.dashboard.kpi.opsShareDescription,
       tone: 'green',
       tag: t.dashboard.kpi.sdgTag,
     },
   ]
-}
-
-function round1(value: number): number {
-  return Math.round(value * 10) / 10
 }
 
 /**
@@ -116,10 +112,13 @@ function kpiDeltaFooter(
   invert: boolean,
   t: Strings,
   language: Language,
+  /** 'pp' only: display precision (PCT_DECIMALS). */
+  decimals = 1,
 ): ReactNode {
-  const delta = kind === 'pp' ? round1(current - previous) : Math.round(current - previous)
-  const isUp = delta > (kind === 'pp' ? 0.05 : 0)
-  const isDown = delta < (kind === 'pp' ? -0.05 : 0)
+  // Rounded at the display precision, so a change that shows as 0.0 / 0.00 reads "no change".
+  const delta = kind === 'pp' ? roundPct(current - previous, decimals) : Math.round(current - previous)
+  const isUp = delta > 0
+  const isDown = delta < 0
   const arrow = isUp ? '▲' : isDown ? '▼' : '–'
   const isGood = arrow === '–' ? null : arrow === '▲' ? !invert : invert
   const colorClass = isGood === null ? 'text-slate' : isGood ? 'font-semibold text-green-700' : 'font-semibold text-accent-600'
@@ -128,7 +127,7 @@ function kpiDeltaFooter(
     return <span className={colorClass}>{t.dashboard.trend.noChange}</span>
   }
 
-  const absText = kind === 'pp' ? Math.abs(delta).toFixed(1) : Math.abs(delta).toLocaleString()
+  const absText = kind === 'pp' ? Math.abs(delta).toFixed(decimals) : Math.abs(delta).toLocaleString()
   const signedText = `${delta > 0 ? '+' : '−'}${absText}`
   const template =
     kind === 'pp'
@@ -173,12 +172,15 @@ function TrendSummaryHeader({
   selectedYear,
   t,
   language,
+  decimals = 1,
 }: {
   heading: string
   points: TrendChartPoint[]
   selectedYear: Year
   t: Strings
   language: Language
+  /** Display precision (PCT_DECIMALS). */
+  decimals?: number
 }) {
   const summary = computeTrendSummary(points, selectedYear)
   // A pending year (2026 before registry data): no value and no change —
@@ -198,7 +200,7 @@ function TrendSummaryHeader({
     <div className="mb-1.5 flex items-start justify-between gap-3">
       <p className="text-[12.5px] font-semibold text-ink">{heading}</p>
       <div className="text-right text-[11px] leading-[1.5]">
-        <div className="text-[15px] font-bold text-ink">{summary.currentValue !== null ? formatPct(summary.currentValue) : '—'}</div>
+        <div className="text-[15px] font-bold text-ink">{summary.currentValue !== null ? formatPct(summary.currentValue, decimals) : '—'}</div>
         {summary.isFirstYear ? (
           <div className="text-slate">{t.dashboard.trend.firstYearOfData}</div>
         ) : (
@@ -209,6 +211,7 @@ function TrendSummaryHeader({
               compareValue={summary.previousValue}
               kind="vsPreviousYear"
               compareYear={summary.previousYear}
+              decimals={decimals}
               t={t}
               language={language}
             />
@@ -221,6 +224,7 @@ function TrendSummaryHeader({
               compareValue={summary.firstValue}
               kind="sinceYear"
               compareYear={summary.firstYear}
+              decimals={decimals}
               t={t}
               language={language}
             />
@@ -373,7 +377,7 @@ function computeMetricReference(
     const totalArea = scopedRows.reduce((sum, row) => sum + row.total_area_sqm, 0)
     const opsArea = scopedRows.reduce((sum, row) => sum + row.ops_area_sqm, 0)
     const value = totalArea > 0 ? (opsArea / totalArea) * 100 : 0
-    return { value, label: `${scopeLabel} ${formatPct(value)}` }
+    return { value, label: `${scopeLabel} ${formatPct(value, PCT_DECIMALS.share_ops_pct)}` }
   }
   const sum = scopedRows.reduce((total, row) => total + (metric === 'total_population' ? row.total_population : row.population_with_access), 0)
   const value = scopedRows.length > 0 ? sum / scopedRows.length : 0
@@ -478,7 +482,7 @@ export function DashboardPage() {
       case 'accessibility':
         return kpiDeltaFooter('pp', focusRow.access_pct, previousFocusRow.access_pct, previousYear, false, t, language)
       case 'opsShare':
-        return kpiDeltaFooter('pp', focusRow.share_ops_pct, previousFocusRow.share_ops_pct, previousYear, false, t, language)
+        return kpiDeltaFooter('pp', focusRow.share_ops_pct, previousFocusRow.share_ops_pct, previousYear, false, t, language, PCT_DECIMALS.share_ops_pct)
       case 'covered':
         return kpiDeltaFooter('people', focusRow.population_with_access, previousFocusRow.population_with_access, previousYear, false, t, language)
       case 'notCovered':
@@ -595,7 +599,9 @@ export function DashboardPage() {
   const rankingValues = limitedRows.map((row) => metricValue(row, metric))
   const rankingIsPercent = isPercentMetric(metric)
   const rankingAxis = metric === 'access_pct' ? { max: 100, ticks: [0, 25, 50, 75, 100] } : computeCountAxis(rankingValues)
-  const rankingFormatValue = rankingIsPercent ? formatPct : (value: number) => Math.round(value).toLocaleString()
+  const rankingFormatValue = rankingIsPercent
+    ? (value: number) => formatPct(value, metric === 'share_ops_pct' ? PCT_DECIMALS.share_ops_pct : PCT_DECIMALS.access_pct)
+    : (value: number) => Math.round(value).toLocaleString()
   const rankingBarColor = metric === 'access_pct' ? accessibilityColor : () => NEUTRAL_METRIC_COLOR
   const rankingReference = computeMetricReference(metric, scopedRows, scopeLabel, isWholeCity, t)
   // A specific count that's >= the whole scope shows every area anyway — the
@@ -673,7 +679,7 @@ export function DashboardPage() {
       header: t.dashboard.columns.opsShare,
       sortable: true,
       align: 'right',
-      render: (row) => formatPct(row.share_ops_pct),
+      render: (row) => formatPct(row.share_ops_pct, PCT_DECIMALS.share_ops_pct),
     },
   ]
 
@@ -702,10 +708,11 @@ export function DashboardPage() {
           <DeltaBarChart points={trendAccessSeries} language={language} />
         </Card>
         <Card title={t.dashboard.charts.opsShareTrendTitle} subtitle={t.dashboard.charts.opsShareTrendSubtitle} note={t.common.sampleDataTag}>
-          <TrendSummaryHeader heading={t.map.openSpaceShareLabel} points={trendShareSeries} selectedYear={year} t={t} language={language} />
+          <TrendSummaryHeader heading={t.map.openSpaceShareLabel} points={trendShareSeries} selectedYear={year} t={t} language={language} decimals={PCT_DECIMALS.share_ops_pct} />
           <TrendChart
             points={trendShareSeries}
             selectedYears={[year]}
+            formatValue={(value) => formatPctNumber(value, PCT_DECIMALS.share_ops_pct)}
             yMin={shareAxis.min}
             yMax={shareAxis.max}
             yTicks={shareAxis.ticks}
@@ -717,7 +724,7 @@ export function DashboardPage() {
           />
           <p className="mb-1 mt-5 text-[12.5px] font-semibold text-ink">{t.dashboard.charts.opsShareChangePerYearTitle}</p>
           <p className="mb-2 text-[11px] text-slate">{t.dashboard.charts.opsShareChangePerYearSubtitle}</p>
-          <DeltaBarChart points={trendShareSeries} language={language} />
+          <DeltaBarChart points={trendShareSeries} language={language} decimals={PCT_DECIMALS.share_ops_pct} />
         </Card>
       </div>
     </>

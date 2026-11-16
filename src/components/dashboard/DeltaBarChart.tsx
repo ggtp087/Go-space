@@ -1,4 +1,5 @@
 import { formatYear } from '../../i18n/formatYear'
+import { formatPctChange, roundPct } from '../../mock/areas'
 import type { Language } from '../../i18n/LanguageContext'
 import type { TrendChartPoint } from './TrendChart'
 import { pickLabelIndices } from './trendAxis'
@@ -9,13 +10,11 @@ type DeltaBarChartProps = {
   height?: number
   /** Converts every displayed year (axis labels, tooltips) to Buddhist Era in Thai mode, and the delta tooltip's unit ("pp" vs. "จุด") — defaults to English/CE. */
   language?: Language
+  /** Display precision of the changes (PCT_DECIMALS) — 2 for share of OPS, 1 otherwise. */
+  decimals?: number
 }
 
 const MARGIN = { top: 18, right: 14, bottom: 22, left: 40 }
-
-function round1(value: number): number {
-  return Math.round(value * 10) / 10
-}
 
 /**
  * One bar per year = change vs. the previous year, in percentage points,
@@ -24,16 +23,18 @@ function round1(value: number): number {
  * off the slope by eye. The first year has no previous value, so it has no
  * bar (matches TrendChart's own "first year of data" treatment).
  */
-export function DeltaBarChart({ points, height = 110, language = 'en' }: DeltaBarChartProps) {
+export function DeltaBarChart({ points, height = 110, language = 'en', decimals = 1 }: DeltaBarChartProps) {
   const unit = language === 'th' ? 'จุด' : 'pp'
   const { ref, width } = useChartWidth(600)
   const deltas = points.map((point, index) => {
     const prev = index > 0 ? points[index - 1].value : null
-    const delta = point.value !== null && prev !== null ? round1(point.value - prev) : null
+    const delta = point.value !== null && prev !== null ? roundPct(point.value - prev, decimals) : null
     return { year: point.year, delta }
   })
 
-  const maxAbsDelta = Math.max(...deltas.map((d) => Math.abs(d.delta ?? 0)), 1)
+  // Scale floor follows the precision (1 pp at 1 decimal, 0.1 pp at 2), so
+  // small-valued indicators like share of OPS still get readable bars.
+  const maxAbsDelta = Math.max(...deltas.map((d) => Math.abs(d.delta ?? 0)), 10 ** (1 - decimals))
   const plotWidth = width - MARGIN.left - MARGIN.right
   const plotHeight = height - MARGIN.top - MARGIN.bottom
   const zeroY = MARGIN.top + plotHeight / 2
@@ -60,13 +61,11 @@ export function DeltaBarChart({ points, height = 110, language = 'en' }: DeltaBa
             <g key={d.year}>
               <rect x={xAt(index) - barWidth / 2} y={y} width={barWidth} height={barH} fill={color} rx={2}>
                 <title>
-                  {formatYear(d.year, language)}: {d.delta > 0 ? '+' : ''}
-                  {d.delta} {unit}
+                  {formatYear(d.year, language)}: {formatPctChange(d.delta, decimals)} {unit}
                 </title>
               </rect>
               <text x={xAt(index)} y={labelY} textAnchor="middle" fontSize="12" fontWeight={600} fill="var(--color-slate)">
-                {d.delta > 0 ? '+' : ''}
-                {d.delta}
+                {formatPctChange(d.delta, decimals)}
               </text>
             </g>
           )

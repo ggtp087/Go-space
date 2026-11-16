@@ -1,7 +1,7 @@
 import type { Language } from '../../i18n/LanguageContext'
 import type { Strings } from '../../i18n/strings'
 import { formatYear } from '../../i18n/formatYear'
-import { formatPct } from '../../mock/areas'
+import { formatPct, formatPctChange, roundPct } from '../../mock/areas'
 import type { Year } from '../../mock/years'
 
 type DeltaBadgeKind = 'vsPreviousYear' | 'sinceYear'
@@ -15,12 +15,10 @@ type DeltaBadgeProps = {
   unit?: string
   /** Compact form for a table cell / tight column: "+0.2 pp", with the full sentence as a hover tooltip. */
   compact?: boolean
+  /** Display precision of the values and the change (PCT_DECIMALS) — 2 for share of OPS, 1 otherwise. */
+  decimals?: number
   t: Strings
   language: Language
-}
-
-function round1(value: number): number {
-  return Math.round(value * 10) / 10
 }
 
 /**
@@ -31,16 +29,17 @@ function round1(value: number): number {
  * points" (or "pp" in the compact form, with the full sentence in a
  * tooltip). ▲ green / ▼ orange / – neutral throughout.
  */
-export function DeltaBadge({ currentValue, compareValue, kind, compareYear, unit = '%', compact = false, t, language }: DeltaBadgeProps) {
-  const delta = round1(currentValue - compareValue)
-  const isUp = delta > 0.05
-  const isDown = delta < -0.05
+export function DeltaBadge({ currentValue, compareValue, kind, compareYear, unit = '%', compact = false, decimals = 1, t, language }: DeltaBadgeProps) {
+  // Rounded at the display precision: a change that shows as 0.0 / 0.00 is "no change".
+  const delta = roundPct(currentValue - compareValue, decimals)
+  const isUp = delta > 0
+  const isDown = delta < 0
   const arrow = isUp ? '▲' : isDown ? '▼' : '–'
   const colorClass = isUp ? 'font-semibold text-green-700' : isDown ? 'font-semibold text-accent-600' : 'text-slate'
 
-  const compareValueText = unit === '%' ? formatPct(compareValue) : `${round1(compareValue)}${unit}`
-  const currentValueText = unit === '%' ? formatPct(currentValue) : `${round1(currentValue)}${unit}`
-  const absDeltaText = `${isUp ? '+' : isDown ? '−' : ''}${Math.abs(delta).toFixed(1)}`
+  const compareValueText = unit === '%' ? formatPct(compareValue, decimals) : `${roundPct(compareValue, decimals)}${unit}`
+  const currentValueText = unit === '%' ? formatPct(currentValue, decimals) : `${roundPct(currentValue, decimals)}${unit}`
+  const absDeltaText = formatPctChange(currentValue - compareValue, decimals)
   const yearText = formatYear(compareYear, language)
 
   let fullText: string
