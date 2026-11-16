@@ -36,6 +36,17 @@ function formatChange(value: number, pointsUnit: string): string {
   return `${sign}${Math.abs(rounded).toFixed(1)} ${pointsUnit}`
 }
 
+// Real district/sub-district names can be long ("Phraborom Maharatchawang");
+// the end-label column (MARGIN.right) fits about this many characters before
+// the value. Longer names are cut with an ellipsis; the full name is in the
+// label's tooltip and the legend above the chart.
+const END_LABEL_MAX_NAME_CHARS = 11
+
+function shortenEndLabel(name: string): string {
+  const chars = Array.from(name)
+  return chars.length <= END_LABEL_MAX_NAME_CHARS ? name : `${chars.slice(0, END_LABEL_MAX_NAME_CHARS - 1).join('').trimEnd()}…`
+}
+
 /** Greedy vertical de-collision — sorted ascending, each label pushed down just enough to clear the one above it. Good enough for the handful of end labels (≤5 compared areas) or hover-tooltip rows this chart ever has to place. */
 function declutterY<T extends { y: number }>(items: T[], minGap: number): T[] {
   const sorted = [...items].sort((a, b) => a.y - b.y)
@@ -224,7 +235,10 @@ export function ComparisonTrendChart({ series, mode, selectedYear, language, t, 
 
               {endLabels.map((l) => (
                 <text key={l.id} x={xAt(years.length - 1) + 8} y={l.y + 3} fontSize="11" fontWeight={700} fill={getSeriesTextColor(l.color)}>
-                  {l.label} {formatValue(l.value)}
+                  <title>
+                    {l.label} {formatValue(l.value)}
+                  </title>
+                  {shortenEndLabel(l.label)} {formatValue(l.value)}
                 </text>
               ))}
 

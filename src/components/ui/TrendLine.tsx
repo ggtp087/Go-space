@@ -92,13 +92,8 @@ export function TrendLine({
               />
             ))}
             {coords.map((c) =>
-              c.y === null ? (
-                <circle key={c.year} cx={c.x} cy={height - padBottom} r={2} fill="var(--color-mist-2)">
-                  <title>
-                    {noDataLabel} ({formatYear(c.year, language)})
-                  </title>
-                </circle>
-              ) : highlightYears.includes(c.year) ? (
+              // No value for the year (e.g. pending): nothing drawn, so it can't read as a 0.
+              c.y === null ? null : highlightYears.includes(c.year) ? (
                 <circle key={c.year} cx={c.x} cy={c.y} r={3.5} fill="#fff" stroke={color} strokeWidth={2}>
                   <title>
                     {formatYear(c.year, language)}: {c.value}

@@ -4,7 +4,7 @@ import { formatPct } from '../../mock/areas'
 import { totalOpsCount, type AreaRow } from '../../mock/assessmentResults'
 import type { Strings } from '../../i18n/strings'
 
-type CompareItem = { key: string; color: string; row: AreaRow | undefined }
+type CompareItem = { key: string; color: string; row: AreaRow | undefined; pending?: boolean }
 
 type MetricFormat = 'percent' | 'count'
 
@@ -47,7 +47,7 @@ export function CompareKpiGrid({ items, t }: { items: CompareItem[]; t: Strings 
     <div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {configs.map((config) => (
-          <CompareKpiMiniChart key={config.id} config={config} items={items} />
+          <CompareKpiMiniChart key={config.id} config={config} items={items} pendingLabel={t.common.pendingShort} />
         ))}
       </div>
       {hasPopulationCharts && <p className="mt-3 text-[11px] text-mist">{t.compare.populationNote}</p>}
@@ -55,7 +55,7 @@ export function CompareKpiGrid({ items, t }: { items: CompareItem[]; t: Strings 
   )
 }
 
-function CompareKpiMiniChart({ config, items }: { config: CompareKpiConfig; items: CompareItem[] }) {
+function CompareKpiMiniChart({ config, items, pendingLabel }: { config: CompareKpiConfig; items: CompareItem[]; pendingLabel: string }) {
   const values = items.map((item) => (item.row ? config.getValue(item.row) : null))
   const numericValues = values.filter((v): v is number => v !== null)
   const axisMax =
@@ -83,7 +83,7 @@ function CompareKpiMiniChart({ config, items }: { config: CompareKpiConfig; item
           return (
             <div key={item.key} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end">
               {value === null ? (
-                <span className="text-[10px] font-bold text-mist">—</span>
+                <span className="text-[10px] font-bold text-mist">{item.pending ? pendingLabel : '—'}</span>
               ) : (
                 <div
                   className="relative w-full max-w-[22px] rounded-t-[4px]"

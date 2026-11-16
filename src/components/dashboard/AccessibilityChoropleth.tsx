@@ -4,7 +4,7 @@ import { divIcon } from 'leaflet'
 import type { Layer, LatLngTuple } from 'leaflet'
 import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon, Position } from 'geojson'
 import 'leaflet/dist/leaflet.css'
-import { getAccessibilityColor, getChoroplethSelectionStyle, getChoroplethStyle, getColoredHighlightHaloStyle, getColoredHighlightStyle } from '../../config/mapStyle'
+import { getAccessibilityColor, NO_RESULT_FILL, getChoroplethSelectionStyle, getChoroplethStyle, getColoredHighlightHaloStyle, getColoredHighlightStyle } from '../../config/mapStyle'
 import {
   bangkokBoundaryPositions,
   bangkokOutline,
@@ -196,7 +196,8 @@ export function AccessibilityChoropleth({
       (feature?: Feature<Geometry, { id: string }>) => {
         if (!feature) return {}
         const stats = getAssessmentResult(feature.properties.id, year)
-        return getChoroplethStyle(getAccessibilityColor(stats?.access_pct ?? 0), { interactive })
+        // No result (pending year): neutral grey, not the 0–19.9% class color.
+        return getChoroplethStyle(stats ? getAccessibilityColor(stats.access_pct) : NO_RESULT_FILL, { interactive })
       },
     [year, interactive],
   )

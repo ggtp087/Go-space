@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { LanguageContext, type Language, type LanguageContextValue } from './LanguageContext'
 import { en, th, type Strings } from './strings'
+import { isApiMode } from '../data/dataSource'
 
 const STORAGE_KEY = 'go-space:language'
 
@@ -22,7 +23,25 @@ function writeStoredLanguage(language: Language): void {
   }
 }
 
+/**
+ * In api mode the figures are real, so every "sample data for
+ * demonstration" line becomes the data-source line instead — done once here
+ * rather than at each of the places that show it.
+ */
+function withDataSourceWording(strings: Strings): Strings {
+  if (!isApiMode) return strings
+  return {
+    ...strings,
+    common: { ...strings.common, sampleDataTag: strings.common.realDataTag, noDataBody: strings.common.realDataNoDataBody },
+    dashboard: { ...strings.dashboard, pageSubtitle: strings.common.realDataPageSubtitle },
+  }
+}
+
 function resolveStrings(language: Language): Strings {
+  return withDataSourceWording(resolveBaseStrings(language))
+}
+
+function resolveBaseStrings(language: Language): Strings {
   if (language === 'en') return en
   // th is filled in incrementally; any key it doesn't have yet falls back to en.
   return {

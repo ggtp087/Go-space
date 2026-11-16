@@ -4,6 +4,7 @@ import { getSubDistrictFeature, mockDistrictBoundaries } from './mapBoundaries'
 export type NearbySpace = {
   id: string
   name: string
+  name_th: string
   type: OpsType
   distanceM: number
   districtId: string
@@ -32,9 +33,11 @@ export const publicSpaces: NearbySpace[] = mockDistrictBoundaries.features.flatM
   [0, 1].map((i) => {
     const globalIndex = districtIndex * 2 + i
     const type = opsTypeValues[globalIndex % opsTypeValues.length]
+    const name = nextName(type)
     return {
       id: `${district.properties.id}-space-${i + 1}`,
-      name: nextName(type),
+      name,
+      name_th: name,
       type,
       distanceM: 150 + ((globalIndex * 137) % 700),
       districtId: district.properties.id,

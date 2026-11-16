@@ -7,6 +7,9 @@ import { comparisonPalette } from '../config/mapStyle'
 import { opsTypeValues, type OpsType } from '../config/opsTypes'
 import { availableYears, type Year } from './years'
 import type { Language } from '../i18n/LanguageContext'
+import { isApiMode } from '../data/dataSource'
+import { getApiResult } from '../data/api/store'
+import { getInitialYear } from '../data/yearStatus'
 
 const BANGKOK_NAME_EN = 'Bangkok'
 const BANGKOK_NAME_TH = 'กรุงเทพมหานคร'
@@ -240,6 +243,9 @@ function sumResults(rows: RolledUpResult[]): RolledUpResult {
  * averages a child's percentage.
  */
 export function getAssessmentResult(areaId: string, year: Year): RolledUpResult | undefined {
+  // api mode: the server's rows (district/Bangkok already summed in SQL);
+  // undefined for a pending year, which pages show as "pending", not 0.
+  if (isApiMode) return getApiResult(areaId, year)
   if (areaId === BANGKOK_AREA_ID) {
     return sumResults(allSubDistrictIds.map((id) => getSubDistrictAssessmentResult(id, year)!))
   }
@@ -341,21 +347,23 @@ export function getMetricSeries(id: string, metric: MetricKey): { year: Year; va
 
 // District A, D, J's old role — highest/median/lowest accessibility, picked
 // dynamically now that district ids are generated rather than hand-authored.
-function buildDefaultComparisonAreas(): ComparisonArea[] {
+// Built on first use (not at import): in api mode the results only exist
+// once the app has loaded them from the server.
+export function getDefaultComparisonAreas(): ComparisonArea[] {
   // Names picked here are only a seed value — ComparePage re-resolves each
   // area's display name from its id on every render, so this frozen-at-init
   // English name never actually reaches the screen.
-  const districtRows = getAreaRowsForYear('district', ANCHOR_YEAR, 'en').sort((a, b) => b.access_pct - a.access_pct)
+  const districtRows = getAreaRowsForYear('district', getInitialYear(), 'en').sort((a, b) => b.access_pct - a.access_pct)
+  if (districtRows.length < 3) return []
   const picks = [districtRows[0], districtRows[Math.floor(districtRows.length / 2)], districtRows[districtRows.length - 1]]
   return picks.map((row, index) => ({ id: row.id, name: row.name, color: comparisonPalette[index], level: 'district' as const }))
 }
 
-export const defaultComparisonAreas: ComparisonArea[] = buildDefaultComparisonAreas()
-
 // --- Dev-only roll-up validation -----------------------------------------------
 
-if (import.meta.env.DEV) validateRollups()
-if (import.meta.env.DEV) logDensitySanityCheck()
+// Checks of the mock generator itself — irrelevant when reading the API.
+if (import.meta.env.DEV && !isApiMode) validateRollups()
+if (import.meta.env.DEV && !isApiMode) logDensitySanityCheck()
 
 /** Dev-only sanity log: the 5 densest and 5 sparsest sub-districts by people/km² at the anchor year — lets a human confirm the density-by-distance model actually produced a dense-core/sparse-edge pattern rather than just moving noise around. */
 function logDensitySanityCheck(): void {

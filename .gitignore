@@ -26,3 +26,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# API server secrets (commit only server/.env.example)
+server/.env
+server/dist

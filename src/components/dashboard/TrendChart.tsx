@@ -216,15 +216,10 @@ export function TrendChart({
                           />
                         ))}
                     {s.coords.map((c) =>
-                      c.value === null || c.y === null ? (
-                        <circle key={c.year} cx={c.x} cy={height - MARGIN.bottom} r={2} fill="var(--color-mist-2)">
-                          {!isMultiSeries && (
-                            <title>
-                              {formatYear(c.year, language)}: {noDataLabel}
-                            </title>
-                          )}
-                        </circle>
-                      ) : selectedYears.includes(c.year) ? (
+                      // A year without a value (e.g. 2026, pending registry
+                      // data) draws nothing — no point, and nothing on the
+                      // axis that could read as a 0.
+                      c.value === null || c.y === null ? null : selectedYears.includes(c.year) ? (
                         <circle key={c.year} cx={c.x} cy={c.y} r={isMultiSeries ? 4 : 4.5} fill="#fff" stroke={pointColor} strokeWidth={2.5}>
                           {!isMultiSeries && (
                             <title>

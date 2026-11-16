@@ -6,7 +6,7 @@ import { useLanguage } from '../../i18n/LanguageContext'
 import { useArea } from '../../state/AreaContext'
 import { localizedName } from '../../mock/areas'
 import { mockDistrictBoundaries, mockSubDistrictBoundaries } from '../../mock/mapBoundaries'
-import { publicSpaces } from '../../mock/nearbySpaces'
+import { useParkSearch } from '../../data/searchHooks'
 import type { CurrentUser } from '../../mock/currentUser'
 import { lookupName, positions } from '../../mock/organization'
 import { formatDisplayName } from '../../i18n/personName'
@@ -76,6 +76,7 @@ function SearchBox() {
     }
   }, [isOpen])
 
+  const parks = useParkSearch(query)
   const results = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return null
@@ -85,7 +86,7 @@ function SearchBox() {
     // used to match.
     const matchesEitherName = (en: string, th: string) => matchesQuery(en) || matchesQuery(th)
     return {
-      parks: publicSpaces.filter((space) => matchesQuery(space.name)).slice(0, 5),
+      parks,
       districts: mockDistrictBoundaries.features
         .filter((feature) => matchesEitherName(feature.properties.name, feature.properties.name_th))
         .slice(0, 5),
@@ -93,7 +94,7 @@ function SearchBox() {
         .filter((feature) => matchesEitherName(feature.properties.name, feature.properties.name_th))
         .slice(0, 5),
     }
-  }, [query])
+  }, [query, parks])
 
   const hasResults = !!results && (results.parks.length > 0 || results.districts.length > 0 || results.subDistricts.length > 0)
 
@@ -153,7 +154,7 @@ function SearchBox() {
                   onClick={() => goToDistrict(space.districtId)}
                   className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] text-ink hover:bg-green-50"
                 >
-                  <span className="text-slate">{space.name}</span>
+                  <span className="text-slate">{localizedName(space.name, space.name_th, language)}</span>
                   <span className="ml-auto text-[11px] text-mist">{t.map.opsTypes[space.type]}</span>
                 </button>
               ))}

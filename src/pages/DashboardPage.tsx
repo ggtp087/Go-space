@@ -10,6 +10,8 @@ import { AccessibilityChoropleth } from '../components/dashboard/AccessibilityCh
 import { AccessShareScatter } from '../components/dashboard/AccessShareScatter'
 import { CoverageStackedBar, type CoverageMode } from '../components/dashboard/CoverageStackedBar'
 import { DeltaBadge } from '../components/dashboard/DeltaBadge'
+import { DataStateNotice } from '../components/ui/DataStateNotice'
+import { isPendingYear } from '../data/yearStatus'
 import { DeltaBarChart } from '../components/dashboard/DeltaBarChart'
 import { KPI_ICONS } from '../components/dashboard/kpiIcons'
 import { RankingBarChart } from '../components/dashboard/RankingBarChart'
@@ -179,6 +181,19 @@ function TrendSummaryHeader({
   language: Language
 }) {
   const summary = computeTrendSummary(points, selectedYear)
+  // A pending year (2026 before registry data): no value and no change —
+  // say so instead of a dash or a 0.
+  if (summary.currentValue === null && isPendingYear(selectedYear)) {
+    return (
+      <div className="mb-1.5 flex items-start justify-between gap-3">
+        <p className="text-[12.5px] font-semibold text-ink">{heading}</p>
+        <div className="text-right text-[11px] leading-[1.5]">
+          <div className="text-[15px] font-bold text-accent-700">{t.common.pendingShort}</div>
+          <div className="text-slate">{t.common.pendingTitle}</div>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="mb-1.5 flex items-start justify-between gap-3">
       <p className="text-[12.5px] font-semibold text-ink">{heading}</p>
@@ -662,6 +677,52 @@ export function DashboardPage() {
     },
   ]
 
+  // The trend charts, shared by the normal view and a pending year's view —
+  // the lines simply end at the last year with results.
+  const trendsSection = (
+    <>
+      <h2 className="mb-3 text-[15px] font-bold text-ink">{t.dashboard.sections.trends}</h2>
+      <div className="mb-10 grid gap-6 sm:grid-cols-2">
+        <Card title={t.dashboard.charts.accessibilityTrendTitle} subtitle={t.dashboard.charts.accessibilityTrendSubtitle} note={t.common.sampleDataTag}>
+          <TrendSummaryHeader heading={t.compare.metricAccessibility} points={trendAccessSeries} selectedYear={year} t={t} language={language} />
+          <TrendChart
+            points={trendAccessSeries}
+            selectedYears={[year]}
+            yMin={accessAxis.min}
+            yMax={accessAxis.max}
+            yTicks={accessAxis.ticks}
+            axisNote={t.dashboard.trend.axisNote}
+            language={language}
+            noDataLabel={t.common.noData}
+            colorBySegmentDirection
+            directionNote={t.dashboard.trend.directionNote}
+          />
+          <p className="mb-1 mt-5 text-[12.5px] font-semibold text-ink">{t.dashboard.charts.accessibilityChangePerYearTitle}</p>
+          <p className="mb-2 text-[11px] text-slate">{t.dashboard.charts.accessibilityChangePerYearSubtitle}</p>
+          <DeltaBarChart points={trendAccessSeries} language={language} />
+        </Card>
+        <Card title={t.dashboard.charts.opsShareTrendTitle} subtitle={t.dashboard.charts.opsShareTrendSubtitle} note={t.common.sampleDataTag}>
+          <TrendSummaryHeader heading={t.map.openSpaceShareLabel} points={trendShareSeries} selectedYear={year} t={t} language={language} />
+          <TrendChart
+            points={trendShareSeries}
+            selectedYears={[year]}
+            yMin={shareAxis.min}
+            yMax={shareAxis.max}
+            yTicks={shareAxis.ticks}
+            axisNote={t.dashboard.trend.axisNote}
+            language={language}
+            noDataLabel={t.common.noData}
+            colorBySegmentDirection
+            directionNote={t.dashboard.trend.directionNote}
+          />
+          <p className="mb-1 mt-5 text-[12.5px] font-semibold text-ink">{t.dashboard.charts.opsShareChangePerYearTitle}</p>
+          <p className="mb-2 text-[11px] text-slate">{t.dashboard.charts.opsShareChangePerYearSubtitle}</p>
+          <DeltaBarChart points={trendShareSeries} language={language} />
+        </Card>
+      </div>
+    </>
+  )
+
   return (
     <div className="flex-1 overflow-auto p-10">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -683,10 +744,10 @@ export function DashboardPage() {
       </div>
 
       {!focusRow ? (
-        <div className="rounded-lg border border-dashed border-line-2 p-4 text-center">
-          <p className="text-[13px] font-semibold text-ink">{t.common.noDataTitle}</p>
-          <p className="mt-1 text-[12px] text-slate">{t.common.noDataBody.replace('{year}', formatYear(year, language))}</p>
-        </div>
+        <>
+          <DataStateNotice year={year} className="mb-8" />
+          {isPendingYear(year) && trendsSection}
+        </>
       ) : (
         <>
           <h2 className="mb-3 text-[15px] font-bold text-ink">{t.dashboard.sections.overview}</h2>
@@ -707,45 +768,7 @@ export function DashboardPage() {
           </div>
           <p className="mb-10 mt-2 text-[11px] text-mist">{t.dashboard.populationFootnote}</p>
 
-          <h2 className="mb-3 text-[15px] font-bold text-ink">{t.dashboard.sections.trends}</h2>
-          <div className="mb-10 grid gap-6 sm:grid-cols-2">
-            <Card title={t.dashboard.charts.accessibilityTrendTitle} subtitle={t.dashboard.charts.accessibilityTrendSubtitle} note={t.common.sampleDataTag}>
-              <TrendSummaryHeader heading={t.compare.metricAccessibility} points={trendAccessSeries} selectedYear={year} t={t} language={language} />
-              <TrendChart
-                points={trendAccessSeries}
-                selectedYears={[year]}
-                yMin={accessAxis.min}
-                yMax={accessAxis.max}
-                yTicks={accessAxis.ticks}
-                axisNote={t.dashboard.trend.axisNote}
-                language={language}
-                noDataLabel={t.common.noData}
-                colorBySegmentDirection
-                directionNote={t.dashboard.trend.directionNote}
-              />
-              <p className="mb-1 mt-5 text-[12.5px] font-semibold text-ink">{t.dashboard.charts.accessibilityChangePerYearTitle}</p>
-              <p className="mb-2 text-[11px] text-slate">{t.dashboard.charts.accessibilityChangePerYearSubtitle}</p>
-              <DeltaBarChart points={trendAccessSeries} language={language} />
-            </Card>
-            <Card title={t.dashboard.charts.opsShareTrendTitle} subtitle={t.dashboard.charts.opsShareTrendSubtitle} note={t.common.sampleDataTag}>
-              <TrendSummaryHeader heading={t.map.openSpaceShareLabel} points={trendShareSeries} selectedYear={year} t={t} language={language} />
-              <TrendChart
-                points={trendShareSeries}
-                selectedYears={[year]}
-                yMin={shareAxis.min}
-                yMax={shareAxis.max}
-                yTicks={shareAxis.ticks}
-                axisNote={t.dashboard.trend.axisNote}
-                language={language}
-                noDataLabel={t.common.noData}
-                colorBySegmentDirection
-                directionNote={t.dashboard.trend.directionNote}
-              />
-              <p className="mb-1 mt-5 text-[12.5px] font-semibold text-ink">{t.dashboard.charts.opsShareChangePerYearTitle}</p>
-              <p className="mb-2 text-[11px] text-slate">{t.dashboard.charts.opsShareChangePerYearSubtitle}</p>
-              <DeltaBarChart points={trendShareSeries} language={language} />
-            </Card>
-          </div>
+          {trendsSection}
 
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3 rounded-[14px] border border-line bg-card p-4">
             <div className="flex flex-wrap items-end gap-3">

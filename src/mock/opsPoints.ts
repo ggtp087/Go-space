@@ -21,6 +21,8 @@ import {
 export type OpsPointProperties = {
   id: string
   name: string
+  /** Thai name — the real data has one for every OPS; the mock repeats the English placeholder. */
+  name_th: string
   ops_type: OpsType
   area_sqm: number
   opened_year: number
@@ -141,6 +143,7 @@ function buildOpsPoints(): FeatureCollection<Point, OpsPointProperties> {
       properties: {
         id,
         name: `${POINT_NAME_EN[opsType]} ${typeCounters[opsType]}`,
+        name_th: `${POINT_NAME_EN[opsType]} ${typeCounters[opsType]}`,
         ops_type: opsType,
         area_sqm: areaSqm,
         opened_year: openedYear,

@@ -22,6 +22,9 @@ import {
   type BasemapKey,
 } from '../config/mapStyle'
 import { getMapData, getOpsAnalysis, type Bbox, type OpsAnalysis } from '../mock/mapData'
+import { useNearbySpaces, useOpsAnalysis, useOpsPoints, useServiceAreasById } from '../data/mapHooks'
+import { isApiMode } from '../data/dataSource'
+import { DataStateNotice } from '../components/ui/DataStateNotice'
 import {
   bangkokBoundaryPositions,
   getDistrictFeature,
@@ -52,7 +55,6 @@ import { basemapOptions } from '../mock/basemaps'
 import { formatPct, localizedName } from '../mock/areas'
 import { BANGKOK_AREA_ID, areaHasAnyData, getAreaMeta, getAreaRow, getMetricSeries } from '../mock/assessmentResults'
 import { mapLayers } from '../mock/mapLayers'
-import { getNearbySpaces } from '../mock/nearbySpaces'
 import { MIN_LABEL_FOOTPRINT_PX, escapeLabelText, estimateLabelBox, labelBoxesOverlap, type LabelBox } from '../components/map/labelPlacement'
 
 // Starting view + hard pan/zoom limits for the map. The bounds are a
@@ -144,6 +146,8 @@ export function MapPage() {
   // it), ready to drive a real bbox-filtered fetch once the backend exists.
   const [bbox, setBbox] = useState<Bbox | null>(null)
   const mapData = useMemo(() => getMapData(bbox ?? FALLBACK_BBOX), [bbox])
+  // OPS markers for the year — api mode: opened_year <= year, from the server.
+  const { points: opsPoints, key: opsPointsKey } = useOpsPoints(year)
 
   // Drives the analysis card's docked-corner vs. bottom-sheet layout.
   const [mapAreaWidth, setMapAreaWidth] = useState(0)
@@ -197,7 +201,7 @@ export function MapPage() {
         ? new Set(mapData.subDistricts.features.filter((f) => f.properties.district_id === districtId).map((f) => f.properties.id))
         : null
 
-    const ids = mapData.opsPoints.features
+    const ids = opsPoints.features
       .filter((feature) => {
         if (subDistrictId !== 'all') return feature.properties.subdistrict_id === subDistrictId
         if (subDistrictIdsInDistrict) return subDistrictIdsInDistrict.has(feature.properties.subdistrict_id)
@@ -205,16 +209,16 @@ export function MapPage() {
       })
       .map((feature) => feature.properties.id)
     return new Set(ids)
-  }, [mapData.opsPoints, mapData.subDistricts, districtId, subDistrictId, isWholeCity])
+  }, [opsPoints, mapData.subDistricts, districtId, subDistrictId, isWholeCity])
 
   // Combines (AND) with the open-space type chips.
   const visibleOpsPoints = useMemo(() => {
-    const features = mapData.opsPoints.features.filter(
+    const features = opsPoints.features.filter(
       (feature) =>
         visibleByAreaIdSet.has(feature.properties.id) && (selectedType === 'all' || feature.properties.ops_type === selectedType),
     )
-    return { ...mapData.opsPoints, features }
-  }, [mapData.opsPoints, visibleByAreaIdSet, selectedType])
+    return { ...opsPoints, features }
+  }, [opsPoints, visibleByAreaIdSet, selectedType])
 
   // The district/sub-district boundary currently selected — highlighted on
   // the map regardless of the boundary-toggle state.
@@ -241,13 +245,10 @@ export function MapPage() {
 
   const selectedOpsId = selection?.opsId
   const selectedOpsFeature = useMemo(
-    () => (selectedOpsId ? mapData.opsPoints.features.find((feature) => feature.properties.id === selectedOpsId) : undefined),
-    [mapData.opsPoints, selectedOpsId],
+    () => (selectedOpsId ? opsPoints.features.find((feature) => feature.properties.id === selectedOpsId) : undefined),
+    [opsPoints, selectedOpsId],
   )
-  const selectedOpsAnalysis = useMemo<OpsAnalysis | undefined>(
-    () => (selectedOpsId ? getOpsAnalysis(selectedOpsId, year) : undefined),
-    [selectedOpsId, year],
-  )
+  const selectedOpsAnalysis = useOpsAnalysis(selectedOpsId, year)
   const selectedSubDistrict = selectedOpsFeature && getSubDistrictFeature(selectedOpsFeature.properties.subdistrict_id)
   const selectedDistrict = selectedSubDistrict && getDistrictFeature(selectedSubDistrict.properties.district_id)
   const isZoomedIn = selection?.mode === 'zoomed'
@@ -275,15 +276,20 @@ export function MapPage() {
   // combined into one MultiPolygon so it's a single layer. Recomputing
   // getOpsAnalysis per point is mock-only work (pure trig, no layout), fine
   // for the few dozen points a filtered view typically has.
+  // api mode: the year's real service areas (one fetch per year), of which
+  // only the visible parks' are combined.
+  const serviceAreasById = useServiceAreasById(year, layerState['service-areas'])
   const allServiceAreas = useMemo<MultiPolygon | null>(() => {
     if (!layerState['service-areas']) return null
-    const polygons = visibleOpsPoints.features
-      .map((feature) => getOpsAnalysis(feature.properties.id, year))
-      .filter((analysis): analysis is OpsAnalysis => Boolean(analysis))
-      .map((analysis) => analysis.serviceArea.coordinates[0])
+    const polygons = isApiMode
+      ? visibleOpsPoints.features.flatMap((feature) => serviceAreasById?.get(feature.properties.id)?.coordinates ?? [])
+      : visibleOpsPoints.features
+          .map((feature) => getOpsAnalysis(feature.properties.id, year))
+          .filter((analysis): analysis is OpsAnalysis => Boolean(analysis))
+          .map((analysis) => analysis.serviceArea.coordinates[0])
     if (polygons.length === 0) return null
     return { type: 'MultiPolygon', coordinates: polygons }
-  }, [layerState, visibleOpsPoints, year])
+  }, [layerState, visibleOpsPoints, year, serviceAreasById])
 
   // Clicking a park only ever opens it in preview — it never moves the map.
   // If a different park was zoomed in, that view gets restored first so its
@@ -410,6 +416,7 @@ export function MapPage() {
   const focusRow = getAreaRow(focusAreaId, year, language)
   const focusHasAnyData = areaHasAnyData(focusAreaId)
   const trendSeries = getMetricSeries(focusAreaId, 'access_pct')
+  const nearby = useNearbySpaces(subDistrictId !== 'all' && !isWholeCity ? focusAreaId : null, year)
 
   // mapLayers.ts only carries a stable id per layer — the shown label always
   // comes from strings.ts, so it switches with the language.
@@ -609,7 +616,7 @@ export function MapPage() {
                 // which two different same-size filtered sets could share)
                 // so GeoJSON's otherwise-inert `data` prop remounts whenever
                 // the visible set actually changes.
-                <GeoJSON key={visibleOpsFilterKey} data={allServiceAreas} style={getAllServiceAreasStyle()} />
+                <GeoJSON key={`${visibleOpsFilterKey}-${opsPointsKey}-${serviceAreasById ? 'api' : 'local'}`} data={allServiceAreas} style={getAllServiceAreasStyle()} />
               )}
             </Pane>
 
@@ -655,7 +662,10 @@ export function MapPage() {
             <Pane name="ops-pane" style={{ zIndex: 407 }}>
               {layerState['open-spaces'] && (
                 <GeoJSON
-                  data={mapData.opsPoints}
+                  // The set of OPS changes with the year in api mode, and
+                  // `data` only applies at creation — remount when it does.
+                  key={opsPointsKey}
+                  data={opsPoints}
                   style={opsPointStyle}
                   pointToLayer={(feature, latlng) =>
                     // A custom pointToLayer bypasses the GeoJSON layer's own pane option, so
@@ -809,10 +819,7 @@ export function MapPage() {
         </span>
 
         {!focusRow ? (
-          <div className="mt-[18px] rounded-lg border border-dashed border-line-2 p-4 text-center">
-            <p className="text-[13px] font-semibold text-ink">{t.common.noDataTitle}</p>
-            <p className="mt-1 text-[12px] text-slate">{t.common.noDataBody.replace('{year}', formatYear(year, language))}</p>
-          </div>
+          <DataStateNotice year={year} className="mt-[18px]" />
         ) : (
           <>
             <div className="mt-[18px] flex items-center gap-[18px]">
@@ -851,8 +858,10 @@ export function MapPage() {
           <SectionTitle>{t.map.nearbySectionTitle}</SectionTitle>
           {subDistrictId === 'all' ? (
             <p className="rounded-lg border border-dashed border-line-2 p-3 text-center text-[12px] text-slate">{t.map.nearbySpacesHint}</p>
+          ) : nearby.loading ? (
+            <p className="p-3 text-center text-[12px] text-slate">{t.common.loading}</p>
           ) : (
-            getNearbySpaces(focusAreaId).map((space) => (
+            nearby.spaces.map((space) => (
             <div key={space.id} className="flex items-center gap-2.5 border-t border-line py-[9px] first:border-t-0">
               <span
                 className="h-3 w-3 flex-none rounded-full"
@@ -860,11 +869,11 @@ export function MapPage() {
                 aria-hidden="true"
               />
               <div>
-                <div className="text-[13px] font-semibold text-ink">{space.name}</div>
+                <div className="text-[13px] font-semibold text-ink">{localizedName(space.name, space.name_th, language)}</div>
                 <div className="text-[11px] text-slate">{t.map.opsTypes[space.type]}</div>
               </div>
               <span className="ml-auto rounded-full bg-green-50 px-2 py-[3px] text-[11.5px] font-semibold text-green-700">
-                {space.distanceM} {t.common.meterUnit}
+                {Math.round(space.distanceM).toLocaleString()} {t.common.meterUnit}
               </span>
             </div>
             ))
@@ -1052,7 +1061,7 @@ function OpsPopupCard({
   return (
     <div className="w-full p-3.5">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-[14px] font-bold leading-tight text-ink">{properties.name}</h3>
+        <h3 className="text-[14px] font-bold leading-tight text-ink">{localizedName(properties.name, properties.name_th, language)}</h3>
         <button
           type="button"
           aria-label={t.common.close}
@@ -1100,7 +1109,10 @@ function OpsPopupCard({
           <div>
             <div className="text-[12px] font-semibold text-ink">{t.map.opsCard.serviceAreaLabel}</div>
             <div className="text-[11px] text-slate">
-              {formatAreaSqKm(analysis.serviceAreaSqm, language)} · {analysis.populationCovered.toLocaleString()} {t.map.opsCard.coveredSuffix}
+              {formatAreaSqKm(analysis.serviceAreaSqm, language)} ·{' '}
+              {analysis.populationCovered === null
+                ? `${t.common.pendingShort} (${t.map.opsCard.coveredSuffix})`
+                : `${Math.round(analysis.populationCovered).toLocaleString()} ${t.map.opsCard.coveredSuffix}`}
             </div>
           </div>
           {isZoomed && (

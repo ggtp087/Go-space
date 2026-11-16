@@ -18,7 +18,7 @@ import { useLanguage } from '../i18n/LanguageContext'
 import { getKpisForYear } from '../mock/kpis'
 import { accessibilityColor, formatPct } from '../mock/areas'
 import {
-  defaultComparisonAreas,
+  getDefaultComparisonAreas,
   getAreaRowsForYear,
   getDistrictOptions,
   totalOpsCount,
@@ -108,7 +108,7 @@ export function ComponentsPreviewPage() {
 
   const districtOptions = getDistrictOptions(language)
   const [selectedTypes, setSelectedTypes] = useState<(typeof opsTypeValues)[number][]>([opsTypeValues[0]])
-  const [comparisonDistricts, setComparisonDistricts] = useState(defaultComparisonAreas)
+  const [comparisonDistricts, setComparisonDistricts] = useState(getDefaultComparisonAreas)
   const [layerOn, setLayerOn] = useState(true)
   const [serviceAreaOn, setServiceAreaOn] = useState(false)
   const [adminLevel, setAdminLevel] = useState<'district' | 'sub-district'>('district')

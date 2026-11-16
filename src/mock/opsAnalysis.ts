@@ -11,7 +11,8 @@ export type OpsAnalysis = {
   ops_id: string
   network: MultiLineString
   serviceArea: MultiPolygon
-  populationCovered: number
+  /** null while the year's population results are pending (overlay_results not computed yet). */
+  populationCovered: number | null
   networkLengthM: number
   serviceAreaSqm: number
 }

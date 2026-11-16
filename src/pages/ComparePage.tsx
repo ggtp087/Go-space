@@ -21,9 +21,11 @@ import { useArea } from '../state/AreaContext'
 import type { AreaLevel } from '../mock/areas'
 import { accessibilityColor, formatPct } from '../mock/areas'
 import { comparisonPalette } from '../config/mapStyle'
+import { isPendingYear } from '../data/yearStatus'
+import { DataStateNotice } from '../components/ui/DataStateNotice'
 import {
   BANGKOK_AREA_ID,
-  defaultComparisonAreas,
+  getDefaultComparisonAreas,
   getAllSubDistrictOptions,
   getAreaMeta,
   getAreaRow,
@@ -43,12 +45,16 @@ type ComparisonItem = {
   title: string
   subtitle: string
   color: string
+  /** The year this item's figures are for (the shown year, or each year in "compare years"). */
+  year: Year
+  /** The year exists but has no population results yet (pending registry data). */
+  pending: boolean
   row: AreaRow | undefined
 }
 
 const MAX_COMPARISON_AREAS = 5
 
-/** A comparison area's name is only ever a seed value (set once, at add-time) — this always re-resolves the current name for its id/language instead, so a language switch (or the frozen defaultComparisonAreas seed) never shows a stale name. */
+/** A comparison area's name is only ever a seed value (set once, at add-time) — this always re-resolves the current name for its id/language instead, so a language switch (or the frozen getDefaultComparisonAreas seed) never shows a stale name. */
 function displayName(area: { id: string; name: string }, language: Language): string {
   return getAreaMeta(area.id, language)?.name ?? area.name
 }
@@ -101,7 +107,7 @@ function buildInitialComparisonAreas(districtId: string, subDistrictId: string, 
     areas.push({ id: BANGKOK_AREA_ID, name: bangkokLabel, level: 'district', color: comparisonPalette[1] })
     return areas
   }
-  return defaultComparisonAreas
+  return getDefaultComparisonAreas()
 }
 
 export function ComparePage() {
@@ -192,6 +198,8 @@ export function ComparePage() {
           title: displayName(a, language),
           subtitle: formatYear(year, language),
           color: a.color,
+          year,
+          pending: isPendingYear(year),
           row: getAreaRow(a.id, year, language),
         }))
       : selectedYears.map((y, index) => ({
@@ -199,6 +207,8 @@ export function ComparePage() {
           title: formatYear(y, language),
           subtitle: yearsAreaMeta?.name ?? '',
           color: comparisonPalette[index % comparisonPalette.length],
+          year: y,
+          pending: isPendingYear(y),
           row: getAreaRow(yearsAreaId, y, language),
         }))
 
@@ -315,7 +325,11 @@ export function ComparePage() {
           </div>
         }
       >
-        <CompareKpiGrid items={comparisonItems} t={t} />
+        {comparisonItems.every((item) => item.pending) ? (
+          <DataStateNotice year={comparisonItems[0]?.year ?? year} />
+        ) : (
+          <CompareKpiGrid items={comparisonItems} t={t} />
+        )}
       </Card>
 
       <Card
@@ -404,7 +418,7 @@ export function ComparePage() {
                     <span className="flex-none rounded-full bg-bg px-2 py-0.5 text-[10.5px] font-semibold text-slate">
                       {levelBadgeText(a, t)}
                     </span>
-                    <span className="flex-none text-right font-bold text-ink tabular-nums">{row ? formatPct(row.access_pct) : '—'}</span>
+                    <span className="flex-none text-right font-bold text-ink tabular-nums">{row ? formatPct(row.access_pct) : isPendingYear(year) ? t.common.pendingShort : '—'}</span>
                   </div>
                 )
               })}
@@ -423,12 +437,7 @@ export function ComparePage() {
             <p className="mb-2 text-center text-[11px] text-slate">{item.subtitle}</p>
 
             {!item.row ? (
-              <div className="rounded-lg border border-dashed border-line-2 p-3 text-center">
-                <p className="text-[12.5px] font-semibold text-ink">{t.common.noDataTitle}</p>
-                <p className="mt-1 text-[11px] text-slate">
-                  {t.common.noDataBody.replace('{year}', item.title.match(/^\d{4}$/) ? item.title : formatYear(year, language))}
-                </p>
-              </div>
+              <DataStateNotice year={item.year} className="p-3" />
             ) : (
               <>
                 <p className="mb-1 text-center text-[10.5px] whitespace-nowrap text-slate">{t.compare.accessibilityCaption}</p>

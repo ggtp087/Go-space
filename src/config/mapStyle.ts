@@ -234,6 +234,9 @@ export function getAccessibilityBand(pct: number): AccessibilityBand {
   return accessibilityScale[0]
 }
 
+/** Fill for an area with no result for the year (e.g. 2026 pending registry data) — a neutral grey, never a class color, so it can't be read as 0%. */
+export const NO_RESULT_FILL = '#E5E7EB'
+
 export function getAccessibilityColor(pct: number): string {
   return getAccessibilityBand(pct).color
 }
