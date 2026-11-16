@@ -1,8 +1,8 @@
 import type { Language } from '../../i18n/LanguageContext'
 import type { Strings } from '../../i18n/strings'
 import { formatYear } from '../../i18n/formatYear'
-import { formatPct, formatPctChange, roundPct } from '../../mock/areas'
-import type { Year } from '../../mock/years'
+import { formatPct, formatPctChange, roundPct } from '../../lib/format'
+import type { Year } from '../../data/years'
 
 type DeltaBadgeKind = 'vsPreviousYear' | 'sinceYear'
 

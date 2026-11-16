@@ -1,5 +1,6 @@
 import type { Language } from '../i18n/LanguageContext'
 
+// TEMPORARY — account mocks only, removed in the auth round (see ./README.md).
 // Mock rows of the `departments` and `positions` lookup tables. Forms store
 // the `id`; the name shown is name_th or name_en for the current language.
 export type LookupRow = { id: string; name_en: string; name_th: string }

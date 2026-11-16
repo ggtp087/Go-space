@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { publicSpaces, type NearbySpace } from '../mock/nearbySpaces'
 import { apiGet, type ApiSearchResponse } from './api/client'
-import { isApiMode } from './dataSource'
+import type { NearbySpace } from './mapHooks'
 import { createResourceCache, useResource } from './resource'
 
 const SEARCH_DEBOUNCE_MS = 250
@@ -29,19 +28,11 @@ const searchCache = createResourceCache(async (q) => {
   return parks
 })
 
-/**
- * Parks (OPS) matching the header search. api mode: the server's
- * parameterized ILIKE over Thai and English names (debounced); mock mode:
- * the mock list, matched locally as before.
- */
+/** Parks (OPS) matching the header search — the server's parameterized ILIKE over Thai and English names (debounced). */
 export function useParkSearch(query: string): NearbySpace[] {
   const q = query.trim()
   const debounced = useDebouncedValue(q, SEARCH_DEBOUNCE_MS)
-  const state = useResource(searchCache, isApiMode && debounced ? debounced.toLowerCase() : null)
+  const state = useResource(searchCache, debounced ? debounced.toLowerCase() : null)
   if (!q) return []
-  if (!isApiMode) {
-    const lower = q.toLowerCase()
-    return publicSpaces.filter((space) => space.name.toLowerCase().includes(lower)).slice(0, MAX_PARKS)
-  }
   return state.status === 'ready' ? state.data.slice(0, MAX_PARKS) : []
 }

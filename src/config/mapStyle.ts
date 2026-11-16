@@ -198,9 +198,9 @@ export function getSeriesTextColor(hex: string): string {
 }
 
 // The one source for the 5-step accessibility color scale — the Dashboard's
-// choropleth/brackets/ranking, mock/areas.ts's accessibilityColor(), and the
-// Map's legend (mock/accessibilityLegend.ts) all read from this, so there's
-// a single place to retune the breaks when real data arrives. Green = good
+// choropleth/brackets/ranking, the Comparison legend and donuts, and
+// data/accessibility.ts all read from this, so there's a single place to
+// retune the breaks. Green = good
 // access, orange/red-orange = low. Tuned so every neighboring pair stays
 // ≥15 ΔE2000 apart under normal vision and simulated protan/deutan/tritan
 // vision: the greens lean slightly blue and the lightness steps are uneven

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { CurrentUserContext, type CurrentUserContextValue } from './CurrentUserContext'
-import { currentUser, type CurrentUser } from '../mock/currentUser'
+import { currentUser, type CurrentUser } from '../mock-auth/currentUser'
 
 export function CurrentUserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser>(currentUser)

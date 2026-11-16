@@ -13,7 +13,6 @@ import { MapPage } from './pages/MapPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { ComparePage } from './pages/ComparePage'
 import { AccountSettingsPage } from './pages/AccountSettingsPage'
-import { ComponentsPreviewPage } from './pages/ComponentsPreviewPage'
 
 function App() {
   return (
@@ -39,9 +38,6 @@ function App() {
                     <Route path="/compare" element={<Navigate to="/comparison" replace />} />
                     <Route path="/account" element={<AccountSettingsPage />} />
                   </Route>
-
-                  {/* Temporary — remove once real pages are assembled from these components. */}
-                  <Route path="/components" element={<ComponentsPreviewPage />} />
                 </Routes>
               </BrowserRouter>
             </ToastProvider>

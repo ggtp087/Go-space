@@ -1,5 +1,6 @@
 import type { PersonNames } from '../i18n/personName'
 
+// TEMPORARY — account mocks only, removed in the auth round (see ./README.md).
 // Placeholder signed-in user shown in the navbar and account settings.
 // Fields mirror users + user_profiles columns (no auth yet, so email lives
 // here too); the four name fields use the user_profiles column names.

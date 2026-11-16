@@ -1,4 +1,4 @@
-import type { Year } from '../../mock/years'
+import type { Year } from '../../data/years'
 
 type SparklinePoint = { year: Year; value: number | null }
 

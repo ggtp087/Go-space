@@ -26,19 +26,10 @@ import { useLanguage } from '../i18n/LanguageContext'
 import type { Strings } from '../i18n/strings'
 import { useYear } from '../state/YearContext'
 import { useArea } from '../state/AreaContext'
-import { accessibilityColor, formatPct, formatPctNumber, getAccessibilityBrackets, PCT_DECIMALS, roundPct } from '../mock/areas'
-import { availableYears, type Year } from '../mock/years'
-import {
-  BANGKOK_AREA_ID,
-  getAllSubDistrictOptions,
-  getAreaMeta,
-  getAreaRow,
-  getChildAreaRows,
-  getDistrictOptions,
-  getMetricSeries,
-  totalOpsCount,
-  type AreaRow,
-} from '../mock/assessmentResults'
+import { accessibilityColor, getAccessibilityBrackets } from '../data/accessibility'
+import { formatPct, formatPctNumber, PCT_DECIMALS, roundPct } from '../lib/format'
+import type { Year } from '../data/years'
+import { BANGKOK_AREA_ID, getAllSubDistrictOptions, getAreaMeta, getAreaRow, getChildAreaRows, getDistrictOptions, getMetricSeries, totalOpsCount, type AreaRow } from '../data/results'
 
 type KpiCardConfig = {
   id: 'accessibility' | 'covered' | 'notCovered' | 'spaces' | 'opsShare'
@@ -406,7 +397,7 @@ export function DashboardPage() {
   // never all ~48 sub-districts citywide.
   const scopedRows = useMemo(() => getChildAreaRows(districtId, year, language), [districtId, year, language])
   const previousYear = (year - 1) as Year
-  const hasPreviousYear = (availableYears as readonly number[]).includes(previousYear)
+  const hasPreviousYear = years.includes(previousYear)
   const previousFocusRow = hasPreviousYear ? getAreaRow(focusAreaId, previousYear, language) : undefined
   const previousScopedRowsById = useMemo(() => {
     if (!hasPreviousYear) return new Map<string, AreaRow>()
@@ -689,7 +680,7 @@ export function DashboardPage() {
     <>
       <h2 className="mb-3 text-[15px] font-bold text-ink">{t.dashboard.sections.trends}</h2>
       <div className="mb-10 grid gap-6 sm:grid-cols-2">
-        <Card title={t.dashboard.charts.accessibilityTrendTitle} subtitle={t.dashboard.charts.accessibilityTrendSubtitle} note={t.common.sampleDataTag}>
+        <Card title={t.dashboard.charts.accessibilityTrendTitle} subtitle={t.dashboard.charts.accessibilityTrendSubtitle} note={t.common.dataSourceTag}>
           <TrendSummaryHeader heading={t.compare.metricAccessibility} points={trendAccessSeries} selectedYear={year} t={t} language={language} />
           <TrendChart
             points={trendAccessSeries}
@@ -707,7 +698,7 @@ export function DashboardPage() {
           <p className="mb-2 text-[11px] text-slate">{t.dashboard.charts.accessibilityChangePerYearSubtitle}</p>
           <DeltaBarChart points={trendAccessSeries} language={language} />
         </Card>
-        <Card title={t.dashboard.charts.opsShareTrendTitle} subtitle={t.dashboard.charts.opsShareTrendSubtitle} note={t.common.sampleDataTag}>
+        <Card title={t.dashboard.charts.opsShareTrendTitle} subtitle={t.dashboard.charts.opsShareTrendSubtitle} note={t.common.dataSourceTag}>
           <TrendSummaryHeader heading={t.map.openSpaceShareLabel} points={trendShareSeries} selectedYear={year} t={t} language={language} decimals={PCT_DECIMALS.share_ops_pct} />
           <TrendChart
             points={trendShareSeries}
@@ -817,7 +808,7 @@ export function DashboardPage() {
             <p className="mb-10 rounded-lg border border-dashed border-line-2 p-4 text-center text-[13px] text-slate">{noMatchesMessage}</p>
           ) : (
             <div className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-5">
-              <Card className="xl:col-span-3" title={byDistrictTitle} subtitle={byDistrictSubtitle} note={t.common.sampleDataTag}>
+              <Card className="xl:col-span-3" title={byDistrictTitle} subtitle={byDistrictSubtitle} note={t.common.dataSourceTag}>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
                   <AccessibilityChoropleth
                     districtId={districtId}
@@ -896,7 +887,7 @@ export function DashboardPage() {
                 </div>
               </Card>
 
-              <Card className="xl:col-span-2" title={rankingTitle} note={t.common.sampleDataTag}>
+              <Card className="xl:col-span-2" title={rankingTitle} note={t.common.dataSourceTag}>
                 <RankingBarChart
                   rows={limitedRows.map((row) => ({ id: row.id, name: row.name, value: metricValue(row, metric) }))}
                   selectedId={selectedId}
@@ -913,7 +904,7 @@ export function DashboardPage() {
                 className="lg:col-span-2 xl:col-span-5"
                 title={t.dashboard.charts.coverageTitle}
                 subtitle={t.dashboard.charts.coverageSubtitle}
-                note={t.common.sampleDataTag}
+                note={t.common.dataSourceTag}
                 actions={
                   <SegmentedControl
                     value={coverageMode}
@@ -939,7 +930,7 @@ export function DashboardPage() {
           )}
 
           <h2 className="mb-3 text-[15px] font-bold text-ink">{t.dashboard.sections.relationships}</h2>
-          <Card className="mb-10" title={t.dashboard.charts.scatterTitle} subtitle={t.dashboard.charts.scatterSubtitle} note={t.common.sampleDataTag}>
+          <Card className="mb-10" title={t.dashboard.charts.scatterTitle} subtitle={t.dashboard.charts.scatterSubtitle} note={t.common.dataSourceTag}>
             <AccessShareScatter
               rows={scopedRows}
               highlightIds={shownIds}
@@ -958,7 +949,7 @@ export function DashboardPage() {
           </Card>
 
           <h2 className="mb-3 text-[15px] font-bold text-ink">{t.dashboard.sections.dataTable}</h2>
-          <Card title={tableTitle} subtitle={t.dashboard.tableCardSubtitle} note={t.common.sampleDataTag}>
+          <Card title={tableTitle} subtitle={t.dashboard.tableCardSubtitle} note={t.common.dataSourceTag}>
             {!hasSearchResults ? (
               <p className="p-4 text-center text-[13px] text-slate">{noMatchesMessage}</p>
             ) : (
@@ -972,7 +963,7 @@ export function DashboardPage() {
                 footer={
                   <>
                     <span>{tableFooterText}</span>
-                    <span>{t.common.sampleDataTag}</span>
+                    <span>{t.common.dataSourceTag}</span>
                   </>
                 }
               />

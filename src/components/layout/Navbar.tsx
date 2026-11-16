@@ -4,11 +4,11 @@ import { BrandLockup } from '../brand/BrandLockup'
 import { LanguageToggle } from '../LanguageToggle'
 import { useLanguage } from '../../i18n/LanguageContext'
 import { useArea } from '../../state/AreaContext'
-import { localizedName } from '../../mock/areas'
-import { mockDistrictBoundaries, mockSubDistrictBoundaries } from '../../mock/mapBoundaries'
+import { localizedName } from '../../i18n/localizedName'
+import { districtBoundaries, subDistrictBoundaries } from '../../data/boundaries'
+import type { CurrentUser } from '../../mock-auth/currentUser'
+import { lookupName, positions } from '../../mock-auth/organization'
 import { useParkSearch } from '../../data/searchHooks'
-import type { CurrentUser } from '../../mock/currentUser'
-import { lookupName, positions } from '../../mock/organization'
 import { formatDisplayName } from '../../i18n/personName'
 import { UserAvatar } from '../ui/UserAvatar'
 
@@ -87,10 +87,10 @@ function SearchBox() {
     const matchesEitherName = (en: string, th: string) => matchesQuery(en) || matchesQuery(th)
     return {
       parks,
-      districts: mockDistrictBoundaries.features
+      districts: districtBoundaries.features
         .filter((feature) => matchesEitherName(feature.properties.name, feature.properties.name_th))
         .slice(0, 5),
-      subDistricts: mockSubDistrictBoundaries.features
+      subDistricts: subDistrictBoundaries.features
         .filter((feature) => matchesEitherName(feature.properties.name, feature.properties.name_th))
         .slice(0, 5),
     }
@@ -188,7 +188,7 @@ function SearchBox() {
                   {localizedName(feature.properties.name, feature.properties.name_th, language)}
                   <span className="ml-auto text-[11px] font-normal text-mist">
                     {(() => {
-                      const parent = mockDistrictBoundaries.features.find((d) => d.properties.id === feature.properties.district_id)
+                      const parent = districtBoundaries.features.find((d) => d.properties.id === feature.properties.district_id)
                       return parent && localizedName(parent.properties.name, parent.properties.name_th, language)
                     })()}
                   </span>

@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { AreaLevel } from '../mock/areas'
+import type { AreaLevel } from '../data/results'
 
 export type AreaContextValue = {
   level: AreaLevel

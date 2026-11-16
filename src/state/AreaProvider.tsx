@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { AreaContext, type AreaContextValue } from './AreaContext'
-import type { AreaLevel } from '../mock/areas'
-import { getSubDistrictFeature } from '../mock/mapBoundaries'
+import type { AreaLevel } from '../data/results'
+import { getSubDistrictFeature } from '../data/boundaries'
 
 export function AreaProvider({ children }: { children: ReactNode }) {
   const [level, setLevel] = useState<AreaLevel>('district')

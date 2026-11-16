@@ -1,15 +1,44 @@
 import type { FeatureCollection, MultiLineString, MultiPolygon, Point, Polygon } from 'geojson'
-import { getOpsAnalysis, type OpsAnalysis } from '../mock/opsAnalysis'
-import { getNearbySpaces, type NearbySpace } from '../mock/nearbySpaces'
-import { mockOpsPoints, type OpsPointProperties } from '../mock/opsPoints'
-import type { Year } from '../mock/years'
+import type { OpsType } from '../config/opsTypes'
 import { apiGet, type ApiNearbyResponse, type ApiOpsCollection, type ApiOpsDetail, type ApiServiceAreas } from './api/client'
-import { isApiMode } from './dataSource'
-import { createResourceCache, useResource } from './resource'
+import { createResourceCache, useResource, type ResourceState } from './resource'
+import type { Year } from './years'
 
-// Map data that depends on the year or a selection. Mock mode keeps the
-// existing synchronous mock functions; api mode fetches on demand and caches
-// per key. Shapes match the mock types, so MapPage handles both the same way.
+// Map data that depends on the year or a selection, fetched from the API on
+// demand and cached per key.
+
+/** One OPS marker (spatial.open_public_spaces, open in the year). */
+export type OpsPointProperties = {
+  id: string
+  name: string
+  name_th: string
+  ops_type: OpsType
+  area_sqm: number
+  opened_year: number
+  subdistrict_id: string
+}
+
+/** One OPS's analysis for a year: network_analysis_results, service_area_results, overlay_results. */
+export type OpsAnalysis = {
+  analysis_id: string
+  ops_id: string
+  network: MultiLineString
+  serviceArea: MultiPolygon
+  /** Per-OPS only (never summed); null while the year's population results are pending. */
+  populationCovered: number | null
+  networkLengthM: number
+  serviceAreaSqm: number
+}
+
+/** An OPS near an area, nearest first. */
+export type NearbySpace = {
+  id: string
+  name: string
+  name_th: string
+  type: OpsType
+  distanceM: number
+  districtId: string
+}
 
 /** Whole-city bbox (WGS 84) — every Bangkok OPS falls inside it. */
 const BANGKOK_BBOX = '100.32,13.48,100.95,13.96'
@@ -49,16 +78,23 @@ const opsPointsCache = createResourceCache(async (year) => {
 })
 
 /**
- * OPS markers for the year (api: opened_year <= year, from the server). `key`
+ * OPS markers for the year (opened_year <= year, from the server). `key`
  * changes when the set changes, for remounting Leaflet GeoJSON layers whose
  * `data` only applies at creation.
  */
-export function useOpsPoints(year: Year): { points: FeatureCollection<Point, OpsPointProperties>; key: string; loading: boolean } {
-  const state = useResource(opsPointsCache, isApiMode ? String(year) : null)
-  if (!isApiMode) return { points: mockOpsPoints, key: 'mock', loading: false }
-  if (state.status === 'ready') return { points: state.data, key: `api-${year}`, loading: false }
-  if (lastOpsPoints) return { points: lastOpsPoints.points, key: `api-${lastOpsPoints.year}`, loading: true }
-  return { points: EMPTY_POINTS, key: `api-${year}-${state.status}`, loading: state.status === 'loading' }
+export function useOpsPoints(year: Year): {
+  points: FeatureCollection<Point, OpsPointProperties>
+  key: string
+  loading: boolean
+  error: Error | null
+  retry: () => void
+} {
+  const state: ResourceState<FeatureCollection<Point, OpsPointProperties>> = useResource(opsPointsCache, String(year))
+  const retry = () => opsPointsCache.ensure(String(year))
+  const error = state.status === 'error' ? state.error : null
+  if (state.status === 'ready') return { points: state.data, key: `api-${year}`, loading: false, error, retry }
+  if (lastOpsPoints) return { points: lastOpsPoints.points, key: `api-${lastOpsPoints.year}`, loading: state.status === 'loading', error, retry }
+  return { points: EMPTY_POINTS, key: `api-${year}-${state.status}`, loading: state.status === 'loading', error, retry }
 }
 
 const opsAnalysisCache = createResourceCache(async (key) => {
@@ -79,9 +115,8 @@ const opsAnalysisCache = createResourceCache(async (key) => {
 
 /** One OPS's network / service area / population covered for the year. */
 export function useOpsAnalysis(opsId: string | undefined, year: Year): OpsAnalysis | undefined {
-  const state = useResource(opsAnalysisCache, isApiMode && opsId ? `${opsId}__${year}` : null)
+  const state = useResource(opsAnalysisCache, opsId ? `${opsId}__${year}` : null)
   if (!opsId) return undefined
-  if (!isApiMode) return getOpsAnalysis(opsId, year)
   return state.status === 'ready' ? state.data : undefined
 }
 
@@ -90,14 +125,10 @@ const serviceAreasCache = createResourceCache(async (year) => {
   return new Map(collection.features.map((f) => [String(f.properties.ops_id), toMultiPolygon(f.geometry)!]))
 })
 
-/**
- * api mode: every OPS's service area for the year, by OPS id (the map
- * combines the visible ones). null in mock mode or until loaded — mock mode
- * builds its own from getOpsAnalysis.
- */
+/** Every OPS's service area for the year, by OPS id (the map combines the visible ones); null until loaded or while the layer is off. */
 export function useServiceAreasById(year: Year, enabled: boolean): Map<string, MultiPolygon> | null {
-  const state = useResource(serviceAreasCache, isApiMode && enabled ? String(year) : null)
-  return isApiMode && enabled && state.status === 'ready' ? state.data : null
+  const state = useResource(serviceAreasCache, enabled ? String(year) : null)
+  return enabled && state.status === 'ready' ? state.data : null
 }
 
 const nearbyCache = createResourceCache(async (key) => {
@@ -114,10 +145,13 @@ const nearbyCache = createResourceCache(async (key) => {
   return spaces
 })
 
-/** OPS near an area (api: within 400 m, open in the year, nearest first). */
-export function useNearbySpaces(areaId: string | null, year: Year): { spaces: NearbySpace[]; loading: boolean } {
-  const state = useResource(nearbyCache, isApiMode && areaId ? `${areaId}__${year}` : null)
-  if (!areaId) return { spaces: [], loading: false }
-  if (!isApiMode) return { spaces: getNearbySpaces(areaId), loading: false }
-  return { spaces: state.status === 'ready' ? state.data : [], loading: state.status === 'loading' || state.status === 'idle' }
+/** OPS within 400 m of an area, open in the year, nearest first. */
+export function useNearbySpaces(areaId: string | null, year: Year): { spaces: NearbySpace[]; loading: boolean; error: boolean } {
+  const state = useResource(nearbyCache, areaId ? `${areaId}__${year}` : null)
+  if (!areaId) return { spaces: [], loading: false, error: false }
+  return {
+    spaces: state.status === 'ready' ? state.data : [],
+    loading: state.status === 'loading' || state.status === 'idle',
+    error: state.status === 'error',
+  }
 }

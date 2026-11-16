@@ -10,19 +10,12 @@ import { useLanguage } from '../i18n/LanguageContext'
 import { focusFirstInvalidName, NAME_FIELDS, trimNames, type NameField } from '../i18n/nameValidation'
 import { formatDisplayName, type PersonNames } from '../i18n/personName'
 import type { Strings } from '../i18n/strings'
-import { departments, lookupName, lookupOptions, positions } from '../mock/organization'
+import { departments, lookupName, lookupOptions, positions } from '../mock-auth/organization'
+import { changePassword, saveProfile } from '../mock-auth/saves'
 import { useCurrentUser } from '../state/CurrentUserContext'
 import { useToast } from '../state/ToastContext'
 
 const NAME_ID_PREFIX = 'profile-name'
-
-/** Stand-ins for the profile/password requests until a backend exists. */
-function saveProfile(): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, 700))
-}
-function changePassword(): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, 700))
-}
 
 function pickNames(names: PersonNames): PersonNames {
   return { first_name_th: names.first_name_th, last_name_th: names.last_name_th, first_name_en: names.first_name_en, last_name_en: names.last_name_en }

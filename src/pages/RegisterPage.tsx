@@ -8,15 +8,11 @@ import { Select } from '../components/ui/Select'
 import { useLanguage } from '../i18n/LanguageContext'
 import { focusFirstInvalidName, trimNames, type NameField } from '../i18n/nameValidation'
 import type { PersonNames } from '../i18n/personName'
-import { departments, lookupName, lookupOptions, positions } from '../mock/organization'
+import { departments, lookupName, lookupOptions, positions } from '../mock-auth/organization'
+import { submitRegistration } from '../mock-auth/saves'
 import { useToast } from '../state/ToastContext'
 
 const NAME_ID_PREFIX = 'register-name'
-
-/** Stand-in for the registration request until a backend exists. */
-function submitRegistration(): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, 700))
-}
 
 export function RegisterPage() {
   const { t, language } = useLanguage()

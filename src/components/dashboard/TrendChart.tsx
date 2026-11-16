@@ -1,6 +1,6 @@
 import { formatYear } from '../../i18n/formatYear'
 import type { Language } from '../../i18n/LanguageContext'
-import type { Year } from '../../mock/years'
+import type { Year } from '../../data/years'
 import { pickLabelIndices } from './trendAxis'
 import { useChartWidth } from './useChartWidth'
 

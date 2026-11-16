@@ -1,5 +1,5 @@
 import { formatYear } from '../../i18n/formatYear'
-import { formatPctChange, roundPct } from '../../mock/areas'
+import { formatPctChange, roundPct } from '../../lib/format'
 import type { Language } from '../../i18n/LanguageContext'
 import type { TrendChartPoint } from './TrendChart'
 import { pickLabelIndices } from './trendAxis'

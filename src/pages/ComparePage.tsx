@@ -18,24 +18,13 @@ import type { Language } from '../i18n/LanguageContext'
 import type { Strings } from '../i18n/strings'
 import { useYear } from '../state/YearContext'
 import { useArea } from '../state/AreaContext'
-import type { AreaLevel } from '../mock/areas'
-import { accessibilityColor, formatPct, formatPctNumber, PCT_DECIMALS } from '../mock/areas'
+import { type AreaLevel, BANGKOK_AREA_ID, getDefaultComparisonAreas, getAllSubDistrictOptions, getAreaMeta, getAreaRow, getDistrictOptions, getFirstAreaId, getMetricSeries, type AreaRow, type ComparisonArea } from '../data/results'
+import { accessibilityColor } from '../data/accessibility'
+import { formatPct, formatPctNumber, PCT_DECIMALS } from '../lib/format'
+import type { Year } from '../data/years'
 import { comparisonPalette } from '../config/mapStyle'
 import { isPendingYear } from '../data/yearStatus'
 import { DataStateNotice } from '../components/ui/DataStateNotice'
-import {
-  BANGKOK_AREA_ID,
-  getDefaultComparisonAreas,
-  getAllSubDistrictOptions,
-  getAreaMeta,
-  getAreaRow,
-  getDistrictOptions,
-  getFirstAreaId,
-  getMetricSeries,
-  type AreaRow,
-  type ComparisonArea,
-} from '../mock/assessmentResults'
-import type { Year } from '../mock/years'
 
 type Mode = 'districts' | 'years'
 type TrendValueMode = 'actual' | 'change'
@@ -313,7 +302,7 @@ export function ComparePage() {
       <Card
         className="mt-8"
         title={t.compare.chartTitle}
-        note={t.common.sampleDataTag}
+        note={t.common.dataSourceTag}
         actions={
           <div className="flex gap-4">
             {comparisonItems.map((item) => (
@@ -335,7 +324,7 @@ export function ComparePage() {
       <Card
         className="mt-6"
         title={t.compare.lineChartTitle}
-        note={t.common.sampleDataTag}
+        note={t.common.dataSourceTag}
         actions={
           mode === 'districts' ? (
             <SegmentedControl
@@ -394,7 +383,7 @@ export function ComparePage() {
       </Card>
 
       {mode === 'districts' && (
-        <Card className="mt-6" title={t.compare.mapCardTitle} note={t.common.sampleDataTag}>
+        <Card className="mt-6" title={t.compare.mapCardTitle} note={t.common.dataSourceTag}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
             <div className="w-full lg:w-[60%]">
               <AccessibilityChoropleth
@@ -490,7 +479,7 @@ export function ComparePage() {
         ))}
       </div>
 
-      <p className="mt-5 text-center text-[10.5px] text-mist">{t.common.sampleDataTag}</p>
+      <p className="mt-5 text-center text-[10.5px] text-mist">{t.common.dataSourceTag}</p>
     </div>
   )
 }

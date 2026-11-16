@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:api": "concurrently -k -n api,web -c blue,green \"npm --prefix server run dev\" \"vite --mode api\"",
+    "dev": "concurrently -k -n api,web -c blue,green \"npm --prefix server run dev\" \"vite\"",
+    "dev:web": "vite",
+    "dev:api": "npm --prefix server run dev",
     "build": "tsc -b && vite build",
     "build:server": "npm --prefix server run build",
     "lint": "eslint .",

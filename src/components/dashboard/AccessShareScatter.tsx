@@ -1,4 +1,4 @@
-import { formatPct, PCT_DECIMALS, roundPct } from '../../mock/areas'
+import { formatPct, PCT_DECIMALS, roundPct } from '../../lib/format'
 import { estimateLabelBox, labelBoxesOverlap, type LabelBox } from '../map/labelPlacement'
 import { computeTrendYAxis } from './trendAxis'
 import { useChartWidth } from './useChartWidth'

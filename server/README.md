@@ -1,21 +1,24 @@
 # GO SPAce API (read-only)
 
 Express + `pg` + TypeScript over the local PostGIS database `"GO SPAce"`.
-Every session runs with `default_transaction_read_only=on`, so the API can
-never modify data.
+It is the app's only data source: every page reads its areas, results, OPS
+and analysis from here. Every database session runs with
+`default_transaction_read_only=on`, so the API can never modify data.
 
 ## Run
 
 ```sh
-cp server/.env.example server/.env   # then edit if needed
-npm --prefix server install
-npm run dev:api                      # API on :3001 + web app in api mode
+cp server/.env.example server/.env   # first time only; edit if needed
+npm install                          # client dependencies (repo root)
+npm --prefix server install          # server dependencies
+npm run dev                          # API on :3001 + web app on :5173
 ```
 
-`npm run dev` (root) still runs the web app on the built-in mock data.
-The data source is chosen by `VITE_DATA_SOURCE=api|mock` (default `mock`);
-`npm run dev:api` uses `vite --mode api` (`.env.api`). Vite proxies `/api` to
-`http://localhost:3001`.
+Open http://localhost:5173. Vite proxies `/api` to `http://localhost:3001`.
+`npm run dev:api` / `npm run dev:web` start just one side.
+
+If the API is not reachable the app shows an error (EN + TH) with a retry
+button; there is no fallback data.
 
 ## Endpoints
 
@@ -41,3 +44,9 @@ Queries slower than 1 s are logged as `[slow query]`.
 
 `PGPASSWORD` is empty for local development only — set it before any
 deployment.
+
+## Not from the API yet
+
+Accounts (signed-in user, departments, positions, register/save/password
+requests) are still temporary client-side mocks in `src/mock-auth/` until
+the auth round.

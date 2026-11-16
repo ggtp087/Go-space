@@ -1,19 +1,18 @@
-import { defaultYear, type Year } from '../mock/years'
-import { getApiLatestYearWithResults, isApiYearPending } from './api/store'
-import { isApiMode } from './dataSource'
+import { getAvailableYears, getLatestYearWithResults, isApiYearPending } from './api/store'
+import type { Year } from './years'
 
 /**
  * True for a year that exists (it's in the year list and selectable) but has
  * no population results yet — 2026 until its civil-registration figures are
  * loaded. Pages show a "pending registry data" state for it instead of
- * numbers; never zeros. Always false for the mock data.
+ * numbers; never zeros.
  */
 export function isPendingYear(year: Year): boolean {
-  return isApiMode && isApiYearPending(year)
+  return isApiYearPending(year)
 }
 
-/** The year the app opens on: the latest year with results in api mode (from /api/years), the mock's default otherwise. */
+/** The year the app opens on: the latest year with results, from /api/years (falls back to the last analysis year). */
 export function getInitialYear(): Year {
-  if (isApiMode) return getApiLatestYearWithResults() ?? defaultYear
-  return defaultYear
+  const years = getAvailableYears()
+  return getLatestYearWithResults() ?? years[years.length - 1]
 }

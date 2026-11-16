@@ -2,7 +2,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { BrandLockup } from '../brand/BrandLockup'
 import { LanguageToggle } from '../LanguageToggle'
 import { useLanguage } from '../../i18n/LanguageContext'
-import { mockDistrictBoundaries, mockSubDistrictBoundaries } from '../../mock/mapBoundaries'
+import { districtBoundaries, subDistrictBoundaries } from '../../data/boundaries'
 
 /**
  * Shell for the signed-out flows (login, register, reset password): a fixed
@@ -23,8 +23,8 @@ export function AuthLayout() {
   // Read straight from the real boundary data so the chip can never drift
   // from the counts the rest of the app (Map/Dashboard/Compare) uses.
   const coverageBadge = t.brand.badgeCoverageTemplate
-    .replace('{districts}', String(mockDistrictBoundaries.features.length))
-    .replace('{subdistricts}', String(mockSubDistrictBoundaries.features.length))
+    .replace('{districts}', String(districtBoundaries.features.length))
+    .replace('{subdistricts}', String(subDistrictBoundaries.features.length))
 
   return (
     <div className="flex min-h-screen">
@@ -47,7 +47,7 @@ export function AuthLayout() {
               {t.brand.badgeYears}
             </span>
           </div>
-          <p className="mt-3 text-[11px] text-[#9DBBA9]">{t.common.sampleDataTag}</p>
+          <p className="mt-3 text-[11px] text-[#9DBBA9]">{t.common.dataSourceTag}</p>
         </div>
 
         <p className="relative z-10 text-[11.5px] leading-relaxed">

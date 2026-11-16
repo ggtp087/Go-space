@@ -7,7 +7,7 @@ export type BasemapOption = {
 }
 
 // "GIS" is first/default — a QGIS-style export look (no tiles, plain white
-// background, just the mock boundary/point layers). The map's own
+// background, just the boundary and OPS layers). The map's own
 // minZoom/maxZoom (set on MapContainer) governs every basemap — no
 // per-provider zoom override here, so there's one number to keep in sync.
 export const basemapOptions: BasemapOption[] = [

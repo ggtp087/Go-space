@@ -1,5 +1,5 @@
 import type { Position } from 'geojson'
-import { isPointInMultiPolygon, multiPolygonBounds, multiPolygonCentroid } from '../../mock/mapBoundaries'
+import { isPointInMultiPolygon, multiPolygonBounds, multiPolygonCentroid } from '../../data/boundaries'
 
 // Below this on-screen footprint (px, in either dimension), an area reads as
 // a sliver too small to plausibly carry a text label without just adding

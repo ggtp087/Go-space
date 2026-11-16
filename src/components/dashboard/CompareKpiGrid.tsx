@@ -1,7 +1,7 @@
 import { KPI_ICONS } from './kpiIcons'
 import { computeCountAxis } from './trendAxis'
-import { formatPct, PCT_DECIMALS } from '../../mock/areas'
-import { totalOpsCount, type AreaRow } from '../../mock/assessmentResults'
+import { formatPct, PCT_DECIMALS } from '../../lib/format'
+import { totalOpsCount, type AreaRow } from '../../data/results'
 import type { Strings } from '../../i18n/strings'
 
 type CompareItem = { key: string; color: string; row: AreaRow | undefined; pending?: boolean }

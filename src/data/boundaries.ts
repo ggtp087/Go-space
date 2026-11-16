@@ -1,14 +1,14 @@
 import type { Feature, FeatureCollection, MultiPolygon, Position } from 'geojson'
-import districtsRaw from '../data/boundaries/districts.geojson?raw'
-import subdistrictsRaw from '../data/boundaries/subdistricts.geojson?raw'
-import bangkokRaw from '../data/boundaries/bangkok.geojson?raw'
+import districtsRaw from './boundaries/districts.geojson?raw'
+import subdistrictsRaw from './boundaries/subdistricts.geojson?raw'
+import bangkokRaw from './boundaries/bangkok.geojson?raw'
 
 // Real Bangkok admin boundaries (QGIS-prepared, EPSG:4326, RFC 7946,
 // coverage-simplified so neighbours share identical edges) — the one
-// district/sub-district id and boundary source for the whole app (Map,
-// Dashboard, and Compare all read assessment figures keyed to these ids via
-// mock/assessmentResults.ts). Imported statically for now; a real backend
-// will eventually serve these instead.
+// district/sub-district id and boundary source for the whole app. Codes,
+// Thai/English names and areas match spatial.districts / spatial.subdistricts
+// exactly; the API keys its results by the same codes. Bundled with the
+// client rather than fetched (they never change between years).
 
 export type DistrictProperties = { id: string; name: string; name_th: string; area_sqm: number }
 export type SubDistrictProperties = { id: string; name: string; name_th: string; district_id: string; area_sqm: number }
@@ -29,7 +29,7 @@ const rawDistricts = JSON.parse(districtsRaw) as FeatureCollection<MultiPolygon,
 const rawSubDistricts = JSON.parse(subdistrictsRaw) as FeatureCollection<MultiPolygon, RawSubDistrictProperties>
 const rawBangkok = JSON.parse(bangkokRaw) as FeatureCollection<MultiPolygon, RawBangkokProperties>
 
-export const mockDistrictBoundaries: FeatureCollection<MultiPolygon, DistrictProperties> = {
+export const districtBoundaries: FeatureCollection<MultiPolygon, DistrictProperties> = {
   type: 'FeatureCollection',
   features: rawDistricts.features.map((feature) => ({
     type: 'Feature',
@@ -43,7 +43,7 @@ export const mockDistrictBoundaries: FeatureCollection<MultiPolygon, DistrictPro
   })),
 }
 
-export const mockSubDistrictBoundaries: FeatureCollection<MultiPolygon, SubDistrictProperties> = {
+export const subDistrictBoundaries: FeatureCollection<MultiPolygon, SubDistrictProperties> = {
   type: 'FeatureCollection',
   features: rawSubDistricts.features.map((feature) => ({
     type: 'Feature',
@@ -146,10 +146,10 @@ if (import.meta.env.DEV) validateSubDistrictAssignment()
  * sum of its sub-districts' areas, independently supplied by each file).
  */
 function validateSubDistrictAssignment(): void {
-  const validDistrictIds = new Set(mockDistrictBoundaries.features.map((feature) => feature.properties.id))
+  const validDistrictIds = new Set(districtBoundaries.features.map((feature) => feature.properties.id))
   const districtIdsById = new Map<string, Set<string>>()
 
-  for (const feature of mockSubDistrictBoundaries.features) {
+  for (const feature of subDistrictBoundaries.features) {
     const { id, district_id } = feature.properties
     const districtIds = districtIdsById.get(id)
     if (districtIds) console.error(`[mapBoundaries] duplicate sub-district id: ${id}`)
@@ -168,11 +168,11 @@ function validateSubDistrictAssignment(): void {
   }
 
   const summedAreaByDistrict = new Map<string, number>()
-  for (const feature of mockSubDistrictBoundaries.features) {
+  for (const feature of subDistrictBoundaries.features) {
     const districtId = feature.properties.district_id
     summedAreaByDistrict.set(districtId, (summedAreaByDistrict.get(districtId) ?? 0) + feature.properties.area_sqm)
   }
-  for (const feature of mockDistrictBoundaries.features) {
+  for (const feature of districtBoundaries.features) {
     const summedArea = summedAreaByDistrict.get(feature.properties.id) ?? 0
     if (Math.abs(summedArea - feature.properties.area_sqm) > feature.properties.area_sqm * 0.001) {
       console.error(`[mapBoundaries] district ${feature.properties.id} area_sqm (${feature.properties.area_sqm}) != sum of its sub-districts (${summedArea})`)
@@ -181,23 +181,23 @@ function validateSubDistrictAssignment(): void {
 }
 
 export function getSubDistrictFeature(id: string): Feature<MultiPolygon, SubDistrictProperties> | undefined {
-  return mockSubDistrictBoundaries.features.find((feature) => feature.properties.id === id)
+  return subDistrictBoundaries.features.find((feature) => feature.properties.id === id)
 }
 
 export function getDistrictFeature(id: string): Feature<MultiPolygon, DistrictProperties> | undefined {
-  return mockDistrictBoundaries.features.find((feature) => feature.properties.id === id)
+  return districtBoundaries.features.find((feature) => feature.properties.id === id)
 }
 
 /** Which sub-district a point falls in — a reverse point→area lookup (e.g. for a raw map click). */
 export function findSubDistrictId(point: Position): string {
-  const containing = mockSubDistrictBoundaries.features.find((feature) => isPointInMultiPolygon(point, feature.geometry.coordinates))
+  const containing = subDistrictBoundaries.features.find((feature) => isPointInMultiPolygon(point, feature.geometry.coordinates))
   if (containing) return containing.properties.id
 
   // Rare fallback for a point that lands in a gap the simplification left
   // between neighbouring polygons — nearest by centroid.
-  let nearestId = mockSubDistrictBoundaries.features[0].properties.id
+  let nearestId = subDistrictBoundaries.features[0].properties.id
   let nearestDistSq = Infinity
-  for (const feature of mockSubDistrictBoundaries.features) {
+  for (const feature of subDistrictBoundaries.features) {
     const [centerLon, centerLat] = multiPolygonCentroid(feature.geometry.coordinates)
     const distSq = (centerLon - point[0]) ** 2 + (centerLat - point[1]) ** 2
     if (distSq < nearestDistSq) {

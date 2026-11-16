@@ -1,4 +1,4 @@
-import { formatPct } from '../../mock/areas'
+import { formatPct } from '../../lib/format'
 import { computeCountAxis } from './trendAxis'
 import { useChartWidth } from './useChartWidth'
 

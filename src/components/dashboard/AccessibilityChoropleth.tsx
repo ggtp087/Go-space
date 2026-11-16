@@ -5,20 +5,13 @@ import type { Layer, LatLngTuple } from 'leaflet'
 import type { Feature, FeatureCollection, Geometry, MultiPolygon, Polygon, Position } from 'geojson'
 import 'leaflet/dist/leaflet.css'
 import { getAccessibilityColor, NO_RESULT_FILL, getChoroplethSelectionStyle, getChoroplethStyle, getColoredHighlightHaloStyle, getColoredHighlightStyle } from '../../config/mapStyle'
-import {
-  bangkokBoundaryPositions,
-  bangkokOutline,
-  getDistrictFeature,
-  getSubDistrictFeature,
-  mockDistrictBoundaries,
-  mockSubDistrictBoundaries,
-  multiPolygonBounds,
-} from '../../mock/mapBoundaries'
-import { BANGKOK_AREA_ID, getAreaMeta, getAssessmentResult } from '../../mock/assessmentResults'
-import { formatPct, localizedName } from '../../mock/areas'
+import { bangkokBoundaryPositions, bangkokOutline, getDistrictFeature, getSubDistrictFeature, districtBoundaries, subDistrictBoundaries, multiPolygonBounds } from '../../data/boundaries'
+import { BANGKOK_AREA_ID, getAreaMeta, getAssessmentResult } from '../../data/results'
+import { formatPct } from '../../lib/format'
+import { localizedName } from '../../i18n/localizedName'
+import type { Year } from '../../data/years'
 import { MIN_LABEL_FOOTPRINT_PX, escapeLabelText, estimateLabelBox, findPolygonInteriorPoint, labelBoxesOverlap, type LabelBox } from '../map/labelPlacement'
 import type { Language } from '../../i18n/LanguageContext'
-import type { Year } from '../../mock/years'
 
 // The ranking-selection outline (item 10): a thicker, darker stroke than the
 // ordinary district/sub-district boundary — matches the "selected" tone used
@@ -117,14 +110,14 @@ function getAreasFitLatLngs(ids: string[]): LatLngTuple[] {
   return getCombinedAreaFitLatLngs(ids)
 }
 
-/** Raw HTML goes into Leaflet's bindTooltip — every value here is our own mock data, but escaping on principle keeps this safe if that ever changes. */
+/** Raw HTML goes into Leaflet's bindTooltip — names come from our own bundled boundaries, but escaping on principle keeps this safe if that ever changes. */
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 /**
  * A small choropleth, shared by the Dashboard and Compare — reuses the Map
- * page's boundary data (mock/mapBoundaries.ts) and style tokens
+ * page's boundary data (data/boundaries.ts) and style tokens
  * (config/mapStyle.ts) rather than copying them, but is its own component
  * since its fill (by access_pct) and scope (districts, or one district's
  * sub-districts) aren't the main Map page's concern. Non-interactive by
@@ -156,8 +149,8 @@ export function AccessibilityChoropleth({
     () => ({
       type: 'FeatureCollection',
       features: isWholeCity
-        ? mockDistrictBoundaries.features
-        : mockSubDistrictBoundaries.features.filter((feature) => feature.properties.district_id === districtId),
+        ? districtBoundaries.features
+        : subDistrictBoundaries.features.filter((feature) => feature.properties.district_id === districtId),
     }),
     [isWholeCity, districtId],
   )
@@ -168,8 +161,8 @@ export function AccessibilityChoropleth({
   // computed once here (keyed on the same feature set), not per zoom/move.
   const labelFeatures = useMemo<ChoroplethLabelFeature[]>(() => {
     const features = isWholeCity
-      ? mockDistrictBoundaries.features
-      : mockSubDistrictBoundaries.features.filter((feature) => feature.properties.district_id === districtId)
+      ? districtBoundaries.features
+      : subDistrictBoundaries.features.filter((feature) => feature.properties.district_id === districtId)
     return features.map((feature) => ({
       id: feature.properties.id,
       name: feature.properties.name,
@@ -225,7 +218,7 @@ export function AccessibilityChoropleth({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactive, year, language, peopleLabel])
 
-  const highlightFeature = !isWholeCity && subDistrictId !== 'all' ? mockSubDistrictBoundaries.features.find((f) => f.properties.id === subDistrictId) : undefined
+  const highlightFeature = !isWholeCity && subDistrictId !== 'all' ? subDistrictBoundaries.features.find((f) => f.properties.id === subDistrictId) : undefined
 
   const fitLatLngs = useMemo(
     () => (fitToIds && fitToIds.length > 0 ? getAreasFitLatLngs(fitToIds) : getDistrictFitLatLngs(districtId)),

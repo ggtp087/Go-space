@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { Year } from '../mock/years'
+import type { Year } from '../data/years'
 
 export type YearContextValue = {
   year: Year

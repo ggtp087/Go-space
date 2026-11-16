@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { CurrentUser } from '../mock/currentUser'
+import type { CurrentUser } from '../mock-auth/currentUser'
 
 export type CurrentUserContextValue = {
   user: CurrentUser
@@ -9,7 +9,7 @@ export type CurrentUserContextValue = {
 
 export const CurrentUserContext = createContext<CurrentUserContextValue | null>(null)
 
-/** The signed-in user (mock until auth exists), shared by the navbar and account settings. */
+/** The signed-in user (temporary mock from src/mock-auth until the auth round), shared by the navbar and account settings. */
 export function useCurrentUser() {
   const ctx = useContext(CurrentUserContext)
   if (!ctx) throw new Error('useCurrentUser must be used within a CurrentUserProvider')

@@ -1,7 +1,7 @@
 import { useLanguage } from '../../i18n/LanguageContext'
 import { formatYear } from '../../i18n/formatYear'
 import { isPendingYear } from '../../data/yearStatus'
-import type { Year } from '../../mock/years'
+import type { Year } from '../../data/years'
 
 /**
  * The empty state where a year's numbers would go: "pending registry data"

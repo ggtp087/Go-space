@@ -21,18 +21,22 @@ import {
   zoomPadding,
   type BasemapKey,
 } from '../config/mapStyle'
-import { getMapData, getOpsAnalysis, type Bbox, type OpsAnalysis } from '../mock/mapData'
-import { useNearbySpaces, useOpsAnalysis, useOpsPoints, useServiceAreasById } from '../data/mapHooks'
-import { isApiMode } from '../data/dataSource'
-import { DataStateNotice } from '../components/ui/DataStateNotice'
 import {
   bangkokBoundaryPositions,
+  districtBoundaries,
   getDistrictFeature,
   getSubDistrictFeature,
   multiPolygonBounds,
   multiPolygonCentroid,
-} from '../mock/mapBoundaries'
-import type { OpsPointProperties } from '../mock/opsPoints'
+  subDistrictBoundaries,
+} from '../data/boundaries'
+import { basemapOptions } from '../config/basemaps'
+import { formatPct, PCT_DECIMALS } from '../lib/format'
+import { localizedName } from '../i18n/localizedName'
+import { BANGKOK_AREA_ID, areaHasAnyData, getAreaMeta, getAreaRow, getMetricSeries } from '../data/results'
+import { mapLayers } from '../config/mapLayers'
+import { useNearbySpaces, useOpsAnalysis, useOpsPoints, useServiceAreasById, type OpsAnalysis, type OpsPointProperties } from '../data/mapHooks'
+import { DataStateNotice } from '../components/ui/DataStateNotice'
 import { opsTypeFilterValues, opsTypeValues, type OpsTypeFilter } from '../config/opsTypes'
 import { Chip } from '../components/ui/Chip'
 import { DonutChart } from '../components/ui/DonutChart'
@@ -51,10 +55,6 @@ import type { Language } from '../i18n/LanguageContext'
 import type { Strings } from '../i18n/strings'
 import { useYear } from '../state/YearContext'
 import { useArea } from '../state/AreaContext'
-import { basemapOptions } from '../mock/basemaps'
-import { formatPct, localizedName, PCT_DECIMALS } from '../mock/areas'
-import { BANGKOK_AREA_ID, areaHasAnyData, getAreaMeta, getAreaRow, getMetricSeries } from '../mock/assessmentResults'
-import { mapLayers } from '../mock/mapLayers'
 import { MIN_LABEL_FOOTPRINT_PX, escapeLabelText, estimateLabelBox, labelBoxesOverlap, type LabelBox } from '../components/map/labelPlacement'
 
 // Starting view + hard pan/zoom limits for the map. The bounds are a
@@ -70,9 +70,8 @@ const BANGKOK_MAX_BOUNDS: LatLngBoundsExpression = [
 ]
 const MAX_BOUNDS_VISCOSITY = 0.8
 
-// Used only for the brief window before the first real moveend-derived bbox
-// arrives (the mock data ignores bbox entirely, so this is mostly cosmetic).
-const FALLBACK_BBOX: Bbox = [100.2, 13.4, 101.05, 14.05]
+// The bundled district/sub-district boundaries (real data, identical to the DB).
+const mapData = { districts: districtBoundaries, subDistricts: subDistrictBoundaries }
 
 // OPS analysis card layout. Below this map-area width, the card docks to the
 // bottom as a sheet instead of the top-right corner.
@@ -142,12 +141,8 @@ export function MapPage() {
   // MapEventBridge child below (which reads the map via context instead),
   // is what mount-time effects that need the map instance should use.
   const [map, setMap] = useState<LeafletMap | null>(null)
-  // Captured on every moveend; currently just feeds getMapData (which ignores
-  // it), ready to drive a real bbox-filtered fetch once the backend exists.
-  const [bbox, setBbox] = useState<Bbox | null>(null)
-  const mapData = useMemo(() => getMapData(bbox ?? FALLBACK_BBOX), [bbox])
-  // OPS markers for the year — api mode: opened_year <= year, from the server.
-  const { points: opsPoints, key: opsPointsKey } = useOpsPoints(year)
+  // OPS markers for the year (opened_year <= year), from the API.
+  const { points: opsPoints, key: opsPointsKey, error: opsPointsError, retry: retryOpsPoints } = useOpsPoints(year)
 
   // Drives the analysis card's docked-corner vs. bottom-sheet layout.
   const [mapAreaWidth, setMapAreaWidth] = useState(0)
@@ -169,7 +164,7 @@ export function MapPage() {
         label: localizedName(feature.properties.name, feature.properties.name_th, language),
       })),
     ],
-    [mapData.districts, t.dashboard.areaSelectAllLabel, language],
+    [t.dashboard.areaSelectAllLabel, language],
   )
   const subDistrictOptions = useMemo(
     () => [
@@ -181,7 +176,7 @@ export function MapPage() {
           label: localizedName(feature.properties.name, feature.properties.name_th, language),
         })),
     ],
-    [mapData.subDistricts, districtId, t.filters.allSubDistricts, language],
+    [districtId, t.filters.allSubDistricts, language],
   )
 
   // Identifies the current filter combination — used to force the ops/
@@ -209,7 +204,7 @@ export function MapPage() {
       })
       .map((feature) => feature.properties.id)
     return new Set(ids)
-  }, [opsPoints, mapData.subDistricts, districtId, subDistrictId, isWholeCity])
+  }, [opsPoints, districtId, subDistrictId, isWholeCity])
 
   // Combines (AND) with the open-space type chips.
   const visibleOpsPoints = useMemo(() => {
@@ -272,24 +267,16 @@ export function MapPage() {
     [selectedOpsId, visibleOpsIdSet],
   )
 
-  // "400 m service areas": every currently-visible park's own service area,
-  // combined into one MultiPolygon so it's a single layer. Recomputing
-  // getOpsAnalysis per point is mock-only work (pure trig, no layout), fine
-  // for the few dozen points a filtered view typically has.
-  // api mode: the year's real service areas (one fetch per year), of which
-  // only the visible parks' are combined.
+  // "400 m service areas": the year's service areas (one fetch per year), of
+  // which only the currently visible parks' are combined into one
+  // MultiPolygon, so it's a single layer.
   const serviceAreasById = useServiceAreasById(year, layerState['service-areas'])
   const allServiceAreas = useMemo<MultiPolygon | null>(() => {
     if (!layerState['service-areas']) return null
-    const polygons = isApiMode
-      ? visibleOpsPoints.features.flatMap((feature) => serviceAreasById?.get(feature.properties.id)?.coordinates ?? [])
-      : visibleOpsPoints.features
-          .map((feature) => getOpsAnalysis(feature.properties.id, year))
-          .filter((analysis): analysis is OpsAnalysis => Boolean(analysis))
-          .map((analysis) => analysis.serviceArea.coordinates[0])
+    const polygons = visibleOpsPoints.features.flatMap((feature) => serviceAreasById?.get(feature.properties.id)?.coordinates ?? [])
     if (polygons.length === 0) return null
     return { type: 'MultiPolygon', coordinates: polygons }
-  }, [layerState, visibleOpsPoints, year, serviceAreasById])
+  }, [layerState, visibleOpsPoints, serviceAreasById])
 
   // Clicking a park only ever opens it in preview — it never moves the map.
   // If a different park was zoomed in, that view gets restored first so its
@@ -385,8 +372,6 @@ export function MapPage() {
     resizeObserver.observe(wrapperEl)
     return () => resizeObserver.disconnect()
   }, [map])
-
-  const handleMoveEnd = useCallback((nextBbox: Bbox) => setBbox(nextBbox), [])
 
   // Escape closes the card (or exits 'zoomed' back to 'preview').
   useEffect(() => {
@@ -662,7 +647,7 @@ export function MapPage() {
             <Pane name="ops-pane" style={{ zIndex: 407 }}>
               {layerState['open-spaces'] && (
                 <GeoJSON
-                  // The set of OPS changes with the year in api mode, and
+                  // The set of OPS changes with the year, and
                   // `data` only applies at creation — remount when it does.
                   key={opsPointsKey}
                   data={opsPoints}
@@ -706,7 +691,7 @@ export function MapPage() {
 
             <ScaleControl position="bottomright" imperial={false} />
 
-            <MapEventBridge onReady={setMap} onMoveEnd={handleMoveEnd} onClick={closeOrExitZoom} />
+            <MapEventBridge onReady={setMap} onClick={closeOrExitZoom} />
           </MapContainer>
         </div>
 
@@ -752,6 +737,19 @@ export function MapPage() {
               <FitIcon />
             </button>
           </div>
+
+          {opsPointsError && (
+            <div
+              role="alert"
+              className="pointer-events-auto absolute left-1/2 top-5 w-[320px] -translate-x-1/2 rounded-xl border border-accent-500/40 bg-card p-3.5 text-center shadow-card-lg"
+            >
+              <p className="text-[13px] font-semibold text-ink">{t.common.apiErrorTitle}</p>
+              <p className="mt-0.5 text-[12px] text-slate">{t.common.apiErrorBody}</p>
+              <Button variant="secondary" className="mt-2.5 h-9" onClick={retryOpsPoints}>
+                {t.common.retry}
+              </Button>
+            </div>
+          )}
 
           {legendRows.length > 0 && (
             <div className="pointer-events-auto absolute bottom-5 left-5">
@@ -803,7 +801,7 @@ export function MapPage() {
             <Button variant="primary" fullWidth icon={<PlusIcon />}>
               {t.map.addToComparison}
             </Button>
-            <p className="mt-2 text-center text-[10.5px] text-mist">{t.common.sampleDataTag}</p>
+            <p className="mt-2 text-center text-[10.5px] text-mist">{t.common.dataSourceTag}</p>
           </>
         }
       >
@@ -978,22 +976,8 @@ function AreaLabels({
  * renders, so this is the reliable way to reach the map from a mount-time
  * effect in the parent).
  */
-function MapEventBridge({
-  onReady,
-  onMoveEnd,
-  onClick,
-}: {
-  onReady: (map: LeafletMap) => void
-  onMoveEnd: (bbox: Bbox) => void
-  onClick: () => void
-}) {
-  const map = useMapEvents({
-    moveend: () => {
-      const bounds = map.getBounds()
-      onMoveEnd([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()])
-    },
-    click: onClick,
-  })
+function MapEventBridge({ onReady, onClick }: { onReady: (map: LeafletMap) => void; onClick: () => void }) {
+  const map = useMapEvents({ click: onClick })
 
   useEffect(() => {
     onReady(map)
