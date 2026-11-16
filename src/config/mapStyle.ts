@@ -464,7 +464,7 @@ export function getPopulationCellStyle(people: number): PathOptions {
 /** Zoom at which OPS are drawn as their real polygons instead of sized markers. */
 export const OPS_POLYGON_MIN_ZOOM = 15
 /** Zoom at which the road network and population grid are loaded (by viewport). */
-export const DETAIL_LAYER_MIN_ZOOM = 14
+export const DETAIL_LAYER_MIN_ZOOM = 15
 
 const OPS_POLYGON_HALO = '#1F2937'
 

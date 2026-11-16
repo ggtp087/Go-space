@@ -11,7 +11,7 @@ export const mapLayers: MapLayer[] = [
   { id: 'service-areas', label: '400 m service areas', defaultOn: true, enabled: true },
   { id: 'district-boundaries', label: 'District boundaries', defaultOn: true, enabled: true },
   { id: 'subdistrict-boundaries', label: 'Sub-district boundaries', defaultOn: false, enabled: true },
-  // Loaded by viewport at zoom >= 14 (spatial.road_networks / population_grids).
+  // Loaded by viewport at zoom >= 15 (spatial.road_networks / population_grids).
   { id: 'street-network', label: 'Road network', defaultOn: false, enabled: true },
   { id: 'population', label: 'Population grid', defaultOn: false, enabled: true },
 ]

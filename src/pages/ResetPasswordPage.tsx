@@ -30,7 +30,6 @@ export function ResetPasswordPage() {
           label={t.auth.resetPassword.emailLabel}
           type="text"
           placeholder={t.auth.resetPassword.emailPlaceholder}
-          defaultValue="nisa.p@bma.go.th"
           icon={<MailIcon />}
         />
 

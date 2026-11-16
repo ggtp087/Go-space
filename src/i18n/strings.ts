@@ -84,7 +84,7 @@ export const en = {
     zoomInRoads: 'Zoom in to see roads',
     zoomInPopulation: 'Zoom in to see the population grid',
     populationLegendTitle: 'People per cell (~100 × 100 m)',
-    layerTruncated: 'Too many features to show here — zoom in to see all of them',
+    layerTruncated: 'Showing part of the data - zoom in',
     selectedAreaLegendLabel: 'Selected area',
     sizeLegendLabel: 'OPS size',
     opsCard: {
@@ -527,7 +527,7 @@ export const th: DeepPartial<Strings> = {
     zoomInRoads: 'ซูมเข้าเพื่อดูถนน',
     zoomInPopulation: 'ซูมเข้าเพื่อดูตารางประชากร',
     populationLegendTitle: 'จำนวนคนต่อช่อง (~100 × 100 เมตร)',
-    layerTruncated: 'ข้อมูลมากเกินกว่าจะแสดงได้ทั้งหมด ซูมเข้าเพื่อดูทั้งหมด',
+    layerTruncated: 'แสดงข้อมูลบางส่วน - ซูมเข้าเพื่อดูทั้งหมด',
     selectedAreaLegendLabel: 'พื้นที่ที่เลือก',
     sizeLegendLabel: 'ขนาด OPS',
     opsCard: {

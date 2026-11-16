@@ -14,7 +14,7 @@ import { resolveYear } from '../years.js'
 
 export const layersRouter = Router()
 
-/** Largest viewport side accepted, in degrees (~28 km) — far more than a zoom-14 screen. */
+/** Largest viewport side accepted, in degrees (~28 km) — far more than a zoom-15 screen. */
 const MAX_SPAN_DEG = 0.25
 
 function bboxFilter(column: string, firstParam: number): string {
@@ -35,11 +35,11 @@ function limited<T>(rows: T[], limit: number): { rows: T[]; truncated: boolean }
   return rows.length > limit ? { rows: rows.slice(0, limit), truncated: true } : { rows, truncated: false }
 }
 
-const ROADS_MIN_ZOOM = 14
+const ROADS_MIN_ZOOM = 15
 const ROADS_LIMIT = 25_000
 
 /**
- * GET /api/roads?bbox=&zoom= (zoom >= 14)
+ * GET /api/roads?bbox=&zoom= (zoom >= 15)
  * The walkable road network used in the analysis (spatial.road_networks —
  * non-walkable segments were removed in ETL and never loaded).
  */
@@ -64,7 +64,7 @@ layersRouter.get('/roads', async (req, res) => {
   })
 })
 
-const GRID_MIN_ZOOM = 14
+const GRID_MIN_ZOOM = 15
 const GRID_LIMIT = 20_000
 
 // Whether a year has adjusted_population at all (2026 has none until its
@@ -85,7 +85,7 @@ async function yearHasAdjustedPopulation(year: number): Promise<boolean> {
 }
 
 /**
- * GET /api/population-grid?year=&bbox=&zoom= (zoom >= 14)
+ * GET /api/population-grid?year=&bbox=&zoom= (zoom >= 15)
  * WorldPop cells (clipped by sub-district) with adjusted_population for the
  * year. A year without adjusted values returns status "pending" and no cells.
  */
