@@ -34,13 +34,17 @@ button; there is no fallback data.
 | `GET /api/service-areas?year=&bbox=[&type=]` | simplified (~10 m) service areas |
 | `GET /api/ops/nearby?area=&year=` | OPS within 400 m of a district/sub-district |
 | `GET /api/search?q=` | parameterized `ILIKE` over Thai/English names, 8 per group |
+| `GET /api/roads?bbox=&zoom=` | zoom ≥ 14; walkable road network (`road_networks`) in the viewport, simplified by zoom, ≤ 25,000 rows (`truncated`) |
+| `GET /api/population-grid?year=&bbox=&zoom=` | zoom ≥ 14; `population_grids.adjusted_population` cells; `status: "pending"` (no cells) for a year without adjusted values (2026), ≤ 20,000 rows |
+| `GET /api/ops-polygons?year=&bbox=&zoom=` | zoom ≥ 15; OPS polygons open in the year, simplified by zoom, ≤ 3,000 rows |
 
 Bad parameters (year not an integer or not an analysis year, unknown level
 or type, malformed bbox) return 400 with a message. `bbox` is
 `minLon,minLat,maxLon,maxLat` in WGS 84; it is transformed to EPSG:32647
 (the geometry column is never transformed, so spatial indexes are used).
 
-Queries slower than 1 s are logged as `[slow query]`.
+Queries slower than 1 s are logged as `[slow query]`. Responses are gzip-compressed.
+The viewport layers reject a missing or oversized bbox (> 0.25° a side) and a zoom below their minimum with 400.
 
 `PGPASSWORD` is empty for local development only — set it before any
 deployment.

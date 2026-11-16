@@ -28,6 +28,8 @@ export type OpsAnalysis = {
   populationCovered: number | null
   networkLengthM: number
   serviceAreaSqm: number
+  /** The park's entrances (open_public_space_entrances) — the origins of its network analysis. */
+  entrances: FeatureCollection<Point, { entrance_id: number; name: string | null }>
 }
 
 /** An OPS near an area, nearest first. */
@@ -109,6 +111,14 @@ const opsAnalysisCache = createResourceCache(async (key) => {
     populationCovered: a.population_covered,
     networkLengthM: a.network_length_m ?? 0,
     serviceAreaSqm: a.service_area_sqm ?? 0,
+    entrances: {
+      type: 'FeatureCollection',
+      features: detail.entrances.map((e) => ({
+        type: 'Feature',
+        geometry: e.geometry,
+        properties: { entrance_id: e.entrance_id, name: e.name },
+      })),
+    },
   }
   return analysis
 })

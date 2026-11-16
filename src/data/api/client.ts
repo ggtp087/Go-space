@@ -1,4 +1,4 @@
-import type { Feature, FeatureCollection, MultiLineString, MultiPolygon, Point, Polygon } from 'geojson'
+import type { Feature, FeatureCollection, Geometry, MultiLineString, MultiPolygon, Point, Polygon } from 'geojson'
 import type { OpsType } from '../../config/opsTypes'
 
 // Response shapes of the read-only API (server/src/routes). snake_case to
@@ -37,6 +37,7 @@ export type ApiOpsCollection = FeatureCollection<Point, ApiOpsProperties>
 export type ApiOpsDetail = ApiOpsProperties & {
   geometry: Point
   polygon: MultiPolygon | Polygon
+  entrances: { entrance_id: number; name: string | null; geometry: Point }[]
   analysis: {
     year: number
     analysis_id: number
@@ -47,6 +48,14 @@ export type ApiOpsDetail = ApiOpsProperties & {
     population_covered: number | null
     population_status: 'ok' | 'pending'
   }
+}
+
+/** /api/roads, /api/population-grid, /api/ops-polygons — viewport layers. */
+export type ApiViewportCollection<G extends Geometry, P> = FeatureCollection<G, P> & {
+  zoom: number
+  truncated: boolean
+  /** population-grid only: "pending" = no adjusted population for the year (no cells). */
+  status?: 'ok' | 'pending'
 }
 
 export type ApiServiceAreas = FeatureCollection<MultiPolygon | Polygon, { ops_id: number; ops_type: OpsType; service_area_sqm: number }>

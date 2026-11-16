@@ -1,5 +1,7 @@
+import compression from 'compression'
 import express, { type ErrorRequestHandler } from 'express'
 import { metaRouter } from './routes/meta.js'
+import { layersRouter } from './routes/layers.js'
 import { opsRouter } from './routes/ops.js'
 import { resultsRouter } from './routes/results.js'
 import { HttpError } from './validate.js'
@@ -7,8 +9,10 @@ import { HttpError } from './validate.js'
 export function createApp() {
   const app = express()
   app.disable('x-powered-by')
+  // GeoJSON compresses ~5–10×; the zoomed-in layers are the main beneficiaries.
+  app.use(compression())
 
-  app.use('/api', metaRouter, resultsRouter, opsRouter)
+  app.use('/api', metaRouter, resultsRouter, opsRouter, layersRouter)
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Not found' })

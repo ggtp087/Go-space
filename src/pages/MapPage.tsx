@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { GeoJSON, MapContainer, Marker, Pane, ScaleControl, TileLayer, useMapEvents } from 'react-leaflet'
 import { circleMarker, divIcon } from 'leaflet'
 import type { FitBoundsOptions, LatLng, LatLngBoundsExpression, LatLngTuple, Map as LeafletMap, PathOptions } from 'leaflet'
-import type { Feature, FeatureCollection, GeometryObject, MultiPolygon, Point, Position } from 'geojson'
+import type { Feature, FeatureCollection, GeometryObject, LineString, MultiLineString, MultiPolygon, Point, Polygon, Position } from 'geojson'
 import 'leaflet/dist/leaflet.css'
 import {
   getAllServiceAreasStyle,
@@ -35,6 +35,19 @@ import { formatPct, PCT_DECIMALS } from '../lib/format'
 import { localizedName } from '../i18n/localizedName'
 import { BANGKOK_AREA_ID, areaHasAnyData, getAreaMeta, getAreaRow, getMetricSeries } from '../data/results'
 import { mapLayers } from '../config/mapLayers'
+import type { OpsType } from '../config/opsTypes'
+import {
+  DETAIL_LAYER_MIN_ZOOM,
+  OPS_POLYGON_MIN_ZOOM,
+  entranceStyle,
+  getOpsPolygonHaloStyle,
+  getOpsPolygonStyle,
+  getPopulationCellStyle,
+  populationClasses,
+  roadStyleByBasemap,
+} from '../config/mapStyle'
+import type { ApiViewportCollection } from '../data/api/client'
+import { useViewportLayer, type Viewport } from '../data/viewportLayers'
 import { useNearbySpaces, useOpsAnalysis, useOpsPoints, useServiceAreasById, type OpsAnalysis, type OpsPointProperties } from '../data/mapHooks'
 import { DataStateNotice } from '../components/ui/DataStateNotice'
 import { opsTypeFilterValues, opsTypeValues, type OpsTypeFilter } from '../config/opsTypes'
@@ -141,6 +154,10 @@ export function MapPage() {
   // MapEventBridge child below (which reads the map via context instead),
   // is what mount-time effects that need the map instance should use.
   const [map, setMap] = useState<LeafletMap | null>(null)
+  // The map's bbox + zoom, reported debounced after pans/zooms — drives the
+  // zoomed-in layers (roads, population grid, OPS polygons).
+  const [viewport, setViewport] = useState<Viewport | null>(null)
+  const zoom = viewport?.zoom ?? BANGKOK_ZOOM
   // OPS markers for the year (opened_year <= year), from the API.
   const { points: opsPoints, key: opsPointsKey, error: opsPointsError, retry: retryOpsPoints } = useOpsPoints(year)
 
@@ -258,13 +275,58 @@ export function MapPage() {
     () => new Set(visibleOpsPoints.features.map((feature) => feature.properties.id)),
     [visibleOpsPoints],
   )
+  // Zoomed-in layers, loaded for the viewport only.
+  const detailZoom = zoom >= DETAIL_LAYER_MIN_ZOOM
+  const roadsOn = layerState['street-network']
+  const populationOn = layerState['population']
+  const roads = useViewportLayer<ApiViewportCollection<LineString | MultiLineString, { road_id: number }>>('roads', {}, viewport, roadsOn && detailZoom)
+  const populationGrid = useViewportLayer<ApiViewportCollection<Polygon | MultiPolygon, { pop_grid_id: number; adjusted_population: number }>>(
+    'population-grid',
+    { year },
+    viewport,
+    populationOn && detailZoom,
+  )
+  const populationPending = populationGrid.data?.status === 'pending'
+  const opsPolygonZoom = layerState['open-spaces'] && zoom >= OPS_POLYGON_MIN_ZOOM
+  const opsPolygons = useViewportLayer<ApiViewportCollection<Polygon | MultiPolygon, { ops_id: number; ops_type: OpsType }>>(
+    'ops-polygons',
+    { year },
+    viewport,
+    opsPolygonZoom,
+  )
+  // At zoom >= 15 parks are drawn as their polygons; a marker stays only for
+  // parks too small to click as a polygon (under ~8 px across at this zoom),
+  // so every OPS remains clickable.
+  const showOpsPolygons = opsPolygonZoom && opsPolygons.data !== null
+  const smallOpsMaxAreaSqm = (8 * metersPerPixel(zoom)) ** 2
+
   const opsPointStyle = useMemo(
     () => (feature?: Feature<GeometryObject, OpsPointProperties>) => {
       if (!feature) return {}
-      if (!visibleOpsIdSet.has(feature.properties.id)) return { radius: 0, weight: 0, fillOpacity: 0, opacity: 0 }
-      return getOpsPointStyle(feature.properties.ops_type, feature.properties.area_sqm, feature.properties.id === selectedOpsId)
+      const hidden = { radius: 0, weight: 0, fillOpacity: 0, opacity: 0 }
+      if (!visibleOpsIdSet.has(feature.properties.id)) return hidden
+      const selected = feature.properties.id === selectedOpsId
+      if (showOpsPolygons) {
+        if (feature.properties.area_sqm >= smallOpsMaxAreaSqm) return hidden
+        return { ...getOpsPointStyle(feature.properties.ops_type, feature.properties.area_sqm, selected), radius: mapStyle.opsPoint.minRadius }
+      }
+      return getOpsPointStyle(feature.properties.ops_type, feature.properties.area_sqm, selected)
+    },
+    [selectedOpsId, visibleOpsIdSet, showOpsPolygons, smallOpsMaxAreaSqm],
+  )
+  const opsPolygonStyle = useMemo(
+    () => (feature?: Feature<GeometryObject, { ops_id: number; ops_type: OpsType }>) => {
+      if (!feature) return {}
+      // Filtered-out parks: no fill and no stroke, so they're neither drawn nor clickable.
+      if (!visibleOpsIdSet.has(String(feature.properties.ops_id))) return { fill: false, stroke: false }
+      return getOpsPolygonStyle(feature.properties.ops_type, String(feature.properties.ops_id) === selectedOpsId)
     },
     [selectedOpsId, visibleOpsIdSet],
+  )
+  const opsPolygonHaloStyle = useMemo(
+    () => (feature?: Feature<GeometryObject, { ops_id: number }>) =>
+      feature && visibleOpsIdSet.has(String(feature.properties.ops_id)) ? getOpsPolygonHaloStyle() : { stroke: false, fill: false },
+    [visibleOpsIdSet],
   )
 
   // "400 m service areas": the year's service areas (one fetch per year), of
@@ -329,16 +391,25 @@ export function MapPage() {
   // being zoomed in is dropped back to preview (the new area fit replaces
   // that view). Reads `selection` via the ref above rather than listing it
   // as a dependency — this must fire only when the area filter changes.
+  // visibleByAreaIdSet also changes with the year (the OPS open that year),
+  // so the camera is only re-fitted when the area itself changed — a year
+  // change keeps the current view (and zoom) and just drops a selected park
+  // that didn't exist that year.
+  const fittedAreaRef = useRef<string | null>(null)
   useEffect(() => {
     if (!map) return
+    const areaKey = `${districtId}/${subDistrictId}`
+    const areaChanged = fittedAreaRef.current !== areaKey
     const current = selectionRef.current
     if (current) {
       if (!visibleByAreaIdSet.has(current.opsId)) {
         setSelection(null)
-      } else if (current.mode === 'zoomed') {
+      } else if (areaChanged && current.mode === 'zoomed') {
         setSelection({ opsId: current.opsId, mode: 'preview', savedView: null })
       }
     }
+    if (!areaChanged) return
+    fittedAreaRef.current = areaKey
     map.fitBounds(getAreaFitLatLngs(districtId, subDistrictId), { padding: [40, 40] })
   }, [map, districtId, subDistrictId, visibleByAreaIdSet])
 
@@ -424,6 +495,22 @@ export function MapPage() {
   // a swatch for nothing.
   const showOpsSizeLegend = layerState['open-spaces'] && visibleOpsPoints.features.length > 0
 
+  // A short status line under a layer's toggle: why it isn't drawn yet, or that it's pending.
+  function layerHint(layerId: string): string | null {
+    if (layerId === 'street-network' && roadsOn) {
+      if (!detailZoom) return t.map.zoomInRoads
+      if (roads.data?.truncated) return t.map.layerTruncated
+    }
+    if (layerId === 'population' && populationOn) {
+      if (!detailZoom) return t.map.zoomInPopulation
+      if (populationPending) return `${t.common.pendingTitle} (${formatYear(year, language)})`
+      if (populationGrid.data?.truncated) return t.map.layerTruncated
+    }
+    if (layerId === 'street-network' && roadsOn && roads.error) return t.common.apiErrorTitle
+    if (layerId === 'population' && populationOn && populationGrid.error) return t.common.apiErrorTitle
+    return null
+  }
+
   const legendRows: { id: string; label: string; swatch: ReactNode }[] = []
   if (showOpsSizeLegend && openSpacesLayer) {
     legendRows.push({ id: 'open-spaces', label: layerLabels[openSpacesLayer.id], swatch: <OpsTypeSwatch /> })
@@ -464,6 +551,20 @@ export function MapPage() {
   if (isZoomedIn && selectedOpsAnalysis && analysisVisibility.network) {
     legendRows.push({ id: 'network', label: t.map.networkLegendLabel, swatch: <StyleSwatch style={getNetworkStyle()} /> })
   }
+  const showEntrances = layerState['open-spaces'] && !!selectedOpsAnalysis && selectedOpsAnalysis.entrances.features.length > 0
+  if (showEntrances) {
+    legendRows.push({ id: 'entrance', label: t.map.entranceLegendLabel, swatch: <EntranceSwatch /> })
+  }
+  // Only layers that are on AND drawn at this zoom appear in the legend.
+  const roadsDrawn = roadsOn && detailZoom && !!roads.data && roads.data.features.length > 0
+  if (roadsDrawn) {
+    legendRows.push({
+      id: 'roads',
+      label: t.map.roadLegendLabel,
+      swatch: <StyleSwatch background={mapStyle.swatchChipBackground[currentBasemap]} style={roadStyleByBasemap[currentBasemap]} />,
+    })
+  }
+  const populationDrawn = populationOn && detailZoom && !!populationGrid.data && !populationPending && populationGrid.data.features.length > 0
   if (highlightFeature) {
     legendRows.push({
       id: 'selected-area',
@@ -480,7 +581,7 @@ export function MapPage() {
           {mapLayers
             .filter((layer) => layer.enabled)
             .map((layer) => (
-              <div key={layer.id} className="flex items-center justify-between py-[7px]">
+              <div key={layer.id} className="flex flex-wrap items-center justify-between gap-y-1 py-[7px]">
                 <span className="flex items-center gap-2.5 text-[13.5px] text-ink">
                   <LayerSwatch layerId={layer.id} basemap={currentBasemap} />
                   {layerLabels[layer.id]}
@@ -490,6 +591,7 @@ export function MapPage() {
                   onChange={(checked) => setLayerState((current) => ({ ...current, [layer.id]: checked }))}
                   label={layerLabels[layer.id]}
                 />
+                {layerHint(layer.id) && <p className="basis-full pl-[26px] text-[11.5px] text-slate">{layerHint(layer.id)}</p>}
               </div>
             ))}
         </div>
@@ -595,7 +697,17 @@ export function MapPage() {
               )}
             </Pane>
 
-            <Pane name="all-service-areas-pane" style={{ zIndex: 402, pointerEvents: 'none' }}>
+            <Pane name="population-pane" style={{ zIndex: 402, pointerEvents: 'none' }}>
+              {populationOn && detailZoom && populationGrid.data && !populationPending && (
+                <GeoJSON
+                  key={`pop-${populationGrid.key}`}
+                  data={populationGrid.data}
+                  style={(feature) => getPopulationCellStyle(feature?.properties.adjusted_population ?? 0)}
+                />
+              )}
+            </Pane>
+
+            <Pane name="all-service-areas-pane" style={{ zIndex: 403, pointerEvents: 'none' }}>
               {allServiceAreas && (
                 // Keyed by the actual filter values (not e.g. a point count,
                 // which two different same-size filtered sets could share)
@@ -605,7 +717,7 @@ export function MapPage() {
               )}
             </Pane>
 
-            <Pane name="service-area-pane" style={{ zIndex: 403, pointerEvents: 'none' }}>
+            <Pane name="service-area-pane" style={{ zIndex: 404, pointerEvents: 'none' }}>
               {isZoomedIn && selectedOpsAnalysis && analysisVisibility.serviceArea && (
                 // Keyed by analysis id: GeoJSON's `data` prop only applies at
                 // creation, so switching parks needs a clean remount to pick
@@ -614,18 +726,24 @@ export function MapPage() {
               )}
             </Pane>
 
-            <Pane name="district-pane" style={{ zIndex: 404, pointerEvents: 'none' }}>
+            <Pane name="roads-pane" style={{ zIndex: 405, pointerEvents: 'none' }}>
+              {roadsOn && detailZoom && roads.data && (
+                <GeoJSON key={`roads-${roads.key}-${currentBasemap}`} data={roads.data} style={roadStyleByBasemap[currentBasemap]} />
+              )}
+            </Pane>
+
+            <Pane name="district-pane" style={{ zIndex: 406, pointerEvents: 'none' }}>
               {layerState['district-boundaries'] && districtHaloStyle && <GeoJSON data={mapData.districts} style={districtHaloStyle} />}
               {layerState['district-boundaries'] && <GeoJSON data={mapData.districts} style={getDistrictOutlineStyle(currentBasemap)} />}
             </Pane>
 
-            <Pane name="network-pane" style={{ zIndex: 405, pointerEvents: 'none' }}>
+            <Pane name="network-pane" style={{ zIndex: 407, pointerEvents: 'none' }}>
               {isZoomedIn && selectedOpsAnalysis && analysisVisibility.network && (
                 <GeoJSON key={selectedOpsAnalysis.analysis_id} data={selectedOpsAnalysis.network} style={getNetworkStyle()} />
               )}
             </Pane>
 
-            <Pane name="highlight-pane" style={{ zIndex: 406, pointerEvents: 'none' }}>
+            <Pane name="highlight-pane" style={{ zIndex: 408, pointerEvents: 'none' }}>
               {highlightParentDistrictFeature && districtHaloStyle && (
                 <GeoJSON key={`parent-halo-${highlightParentDistrictFeature.properties.id}`} data={highlightParentDistrictFeature} style={districtHaloStyle} />
               )}
@@ -644,7 +762,29 @@ export function MapPage() {
               )}
             </Pane>
 
-            <Pane name="ops-pane" style={{ zIndex: 407 }}>
+            {/* OPS polygons (zoom >= 15) and markers are the only interactive map
+                layers. They share one pane: each pane is its own canvas, and only
+                the top canvas receives clicks, so polygons in a pane below the
+                markers could never be clicked. Polygons are added first, so they
+                draw under the markers. */}
+            <Pane name="ops-pane" style={{ zIndex: 410 }}>
+              {showOpsPolygons && opsPolygons.data && (
+                <>
+                  <GeoJSON key={`ops-halo-${opsPolygons.key}`} data={opsPolygons.data} style={opsPolygonHaloStyle} interactive={false} />
+                  <GeoJSON
+                    key={`ops-poly-${opsPolygons.key}`}
+                    data={opsPolygons.data}
+                    style={opsPolygonStyle}
+                    eventHandlers={{
+                      click: (event) => {
+                        const feature = event.propagatedFrom?.feature as Feature<GeometryObject, { ops_id: number }> | undefined
+                        const id = feature ? String(feature.properties.ops_id) : null
+                        if (id && visibleOpsIdSet.has(id)) selectOps(id)
+                      },
+                    }}
+                  />
+                </>
+              )}
               {layerState['open-spaces'] && (
                 <GeoJSON
                   // The set of OPS changes with the year, and
@@ -678,7 +818,17 @@ export function MapPage() {
                 fill or line — harmless to its interactivity, since every
                 label here has pointer-events: none and doesn't intercept
                 clicks meant for the OPS points beneath it. */}
-            <Pane name="labels-pane" style={{ zIndex: 408, pointerEvents: 'none' }}>
+            <Pane name="entrance-pane" style={{ zIndex: 411, pointerEvents: 'none' }}>
+              {showEntrances && selectedOpsAnalysis && (
+                <GeoJSON
+                  key={`entrances-${selectedOpsAnalysis.analysis_id}`}
+                  data={selectedOpsAnalysis.entrances}
+                  pointToLayer={(_feature, latlng) => circleMarker(latlng, { ...entranceStyle, pane: 'entrance-pane' })}
+                />
+              )}
+            </Pane>
+
+            <Pane name="labels-pane" style={{ zIndex: 412, pointerEvents: 'none' }}>
               <AreaLabels
                 districts={mapData.districts}
                 subDistricts={mapData.subDistricts}
@@ -691,7 +841,7 @@ export function MapPage() {
 
             <ScaleControl position="bottomright" imperial={false} />
 
-            <MapEventBridge onReady={setMap} onClick={closeOrExitZoom} />
+            <MapEventBridge onReady={setMap} onClick={closeOrExitZoom} onViewportChange={setViewport} />
           </MapContainer>
         </div>
 
@@ -751,12 +901,17 @@ export function MapPage() {
             </div>
           )}
 
-          {legendRows.length > 0 && (
+          {(legendRows.length > 0 || populationDrawn) && (
             <div className="pointer-events-auto absolute bottom-5 left-5">
               <MapLegendCard
                 title={t.map.activeLayersLegendTitle}
                 rows={legendRows}
-                extra={showOpsSizeLegend && <OpsSizeLegend label={t.map.sizeLegendLabel} language={language} />}
+                extra={
+                  <>
+                    {populationDrawn && <PopulationLegend title={t.map.populationLegendTitle} />}
+                    {showOpsSizeLegend && !showOpsPolygons && <OpsSizeLegend label={t.map.sizeLegendLabel} language={language} />}
+                  </>
+                }
               />
             </div>
           )}
@@ -976,14 +1131,70 @@ function AreaLabels({
  * renders, so this is the reliable way to reach the map from a mount-time
  * effect in the parent).
  */
-function MapEventBridge({ onReady, onClick }: { onReady: (map: LeafletMap) => void; onClick: () => void }) {
-  const map = useMapEvents({ click: onClick })
+const VIEWPORT_DEBOUNCE_MS = 250
+
+function MapEventBridge({
+  onReady,
+  onClick,
+  onViewportChange,
+}: {
+  onReady: (map: LeafletMap) => void
+  onClick: () => void
+  onViewportChange: (viewport: Viewport) => void
+}) {
+  const timerRef = useRef<number | null>(null)
+  const report = () => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current)
+    // Debounced: a drag or a wheel zoom reports once it settles, not on every frame.
+    timerRef.current = window.setTimeout(() => {
+      const bounds = map.getBounds()
+      onViewportChange({ bbox: [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()], zoom: Math.round(map.getZoom()) })
+    }, VIEWPORT_DEBOUNCE_MS)
+  }
+  const map = useMapEvents({ click: onClick, moveend: report, zoomend: report })
 
   useEffect(() => {
     onReady(map)
+    const bounds = map.getBounds()
+    onViewportChange({ bbox: [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()], zoom: Math.round(map.getZoom()) })
+    return () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current)
+    }
+    // Runs once per map instance; onViewportChange is a stable state setter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, onReady])
 
   return null
+}
+
+/** Ground metres per screen pixel at a zoom, at Bangkok's latitude (13.75°N). */
+function metersPerPixel(zoom: number): number {
+  return (156_543.03 * Math.cos((13.75 * Math.PI) / 180)) / 2 ** zoom
+}
+
+function EntranceSwatch() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      <circle cx="7" cy="7" r="4" fill={String(entranceStyle.fillColor)} stroke={String(entranceStyle.color)} strokeWidth={1.5} />
+    </svg>
+  )
+}
+
+/** Population-grid classes (people per cell), low to high. */
+function PopulationLegend({ title }: { title: string }) {
+  return (
+    <div className="mt-2.5 border-t border-line pt-2.5">
+      <p className="mb-1.5 text-[11px] font-semibold text-slate">{title}</p>
+      <div className="flex flex-col gap-1">
+        {populationClasses.map((c) => (
+          <div key={c.label} className="flex items-center gap-2 text-[11px] text-slate">
+            <span className="h-3 w-4 flex-none rounded-[2px] border border-black/10" style={{ background: c.color }} />
+            {c.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function SectionTitle({ children }: { children: ReactNode }) {
@@ -1176,6 +1387,10 @@ function LayerSwatch({ layerId, basemap }: { layerId: string; basemap: BasemapKe
   if (layerId === 'open-spaces') return <OpsTypeSwatch />
   if (layerId === 'service-areas') return <StyleSwatch style={getAllServiceAreasStyle()} />
   const chipBackground = mapStyle.swatchChipBackground[basemap]
+  if (layerId === 'street-network') return <StyleSwatch background={chipBackground} style={roadStyleByBasemap[basemap]} />
+  if (layerId === 'population') {
+    return <StyleSwatch style={{ fill: true, fillColor: populationClasses[3].color, fillOpacity: 0.75, stroke: false }} />
+  }
   if (layerId === 'subdistrict-boundaries') return <StyleSwatch background={chipBackground} style={getSubDistrictStyle(basemap)} />
   if (layerId === 'district-boundaries') {
     const style =

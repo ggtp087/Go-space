@@ -419,3 +419,79 @@ export function getColoredHighlightHaloStyle(): PathOptions {
 export function getColoredHighlightStyle(color: string): PathOptions {
   return { color, weight: COLORED_HIGHLIGHT_WEIGHT, fill: false, interactive: false }
 }
+
+// --- Zoomed-in layers (road network, population grid, OPS polygons, entrances)
+
+/**
+ * The walkable road network used in the analysis — a thin neutral line that
+ * stays behind OPS, the selected park's network (#374151, weight 3) and the
+ * red area selection. Lighter on the satellite basemap so it stays visible.
+ */
+export const roadStyleByBasemap: Record<BasemapKey, PathOptions> = {
+  gis: { color: '#9CA3AF', weight: 1, opacity: 0.85, interactive: false },
+  osm: { color: '#6B7280', weight: 1, opacity: 0.6, interactive: false },
+  satellite: { color: '#E5E7EB', weight: 1, opacity: 0.7, interactive: false },
+}
+
+/**
+ * People per population-grid cell (adjusted_population). Fixed breaks so
+ * years stay comparable, chosen from the real 2017–2025 distribution (~186,700
+ * cells per year: 20% of cells < 2.5 people, median ≈ 30, 80th percentile
+ * ≈ 53–56, 90th ≈ 70–74, 99th ≈ 114–136, max ≈ 340–367). A blue sequential
+ * palette — no green/yellow/orange/red (accessibility scale) and no OPS type
+ * color (green / yellow / orange / purple).
+ */
+export const populationClasses: { min: number; color: string; label: string }[] = [
+  { min: 0, color: '#EFF3FF', label: '< 5' },
+  { min: 5, color: '#C6DBEF', label: '5–14.9' },
+  { min: 15, color: '#9ECAE1', label: '15–29.9' },
+  { min: 30, color: '#6BAED6', label: '30–54.9' },
+  { min: 55, color: '#3182BD', label: '55–79.9' },
+  { min: 80, color: '#08519C', label: '≥ 80' },
+]
+
+export function getPopulationColor(people: number): string {
+  for (let i = populationClasses.length - 1; i > 0; i -= 1) {
+    if (people >= populationClasses[i].min) return populationClasses[i].color
+  }
+  return populationClasses[0].color
+}
+
+export function getPopulationCellStyle(people: number): PathOptions {
+  return { fillColor: getPopulationColor(people), fillOpacity: 0.75, fill: true, stroke: false, interactive: false }
+}
+
+/** Zoom at which OPS are drawn as their real polygons instead of sized markers. */
+export const OPS_POLYGON_MIN_ZOOM = 15
+/** Zoom at which the road network and population grid are loaded (by viewport). */
+export const DETAIL_LAYER_MIN_ZOOM = 14
+
+const OPS_POLYGON_HALO = '#1F2937'
+
+/** Dark halo under an OPS polygon's outline, so the type color reads on any basemap. */
+export function getOpsPolygonHaloStyle(): PathOptions {
+  return { color: OPS_POLYGON_HALO, weight: 3.5, opacity: 0.85, fill: false, interactive: false }
+}
+
+/** OPS polygon: type color fill at ~35% plus a type-color outline; the selected park gets the selected ring. */
+export function getOpsPolygonStyle(opsType: OpsType, selected: boolean): PathOptions {
+  const color = mapStyle.opsPoint.colorsByType[opsType]
+  return {
+    color: selected ? mapStyle.opsPoint.selectedColor : color,
+    weight: selected ? mapStyle.opsPoint.selectedWeight : 1.5,
+    opacity: 1,
+    fillColor: color,
+    fillOpacity: 0.35,
+    fill: true,
+  }
+}
+
+/** An OPS entrance (open_public_space_entrances) of the selected park. */
+export const entranceStyle: CircleMarkerOptions = {
+  radius: 4,
+  color: '#1F2937',
+  weight: 1.5,
+  fillColor: '#FFFFFF',
+  fillOpacity: 1,
+  interactive: false,
+}

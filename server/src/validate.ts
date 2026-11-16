@@ -65,3 +65,23 @@ export function parseSearchQuery(value: unknown): string {
   if (raw.length > 100) throw badRequest('q must be at most 100 characters')
   return raw
 }
+
+/** A map zoom level (integer), at least `min`. Layers that are only drawn when zoomed in reject anything lower. */
+export function parseZoom(value: unknown, min: number, max = 22): number {
+  const zoom = parseInteger(value, 'zoom')
+  if (zoom < min || zoom > max) throw badRequest(`zoom must be between ${min} and ${max}`)
+  return zoom
+}
+
+/**
+ * A required bbox no larger than `maxSpanDeg` on either side — the zoomed-in
+ * layers (roads, population grid, OPS polygons) are only ever requested for a
+ * viewport, never the whole city.
+ */
+export function parseRequiredBbox(value: unknown, maxSpanDeg: number): Bbox {
+  const bbox = parseBbox(value)
+  if (!bbox) throw badRequest('bbox is required: minLon,minLat,maxLon,maxLat')
+  const [minLon, minLat, maxLon, maxLat] = bbox
+  if (maxLon - minLon > maxSpanDeg || maxLat - minLat > maxSpanDeg) throw badRequest(`bbox must span at most ${maxSpanDeg}° on each side`)
+  return bbox
+}
